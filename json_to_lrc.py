@@ -5,7 +5,7 @@ from collections import defaultdict
 
 
 def ms_to_timestamp(ms):
-    """将毫秒转换为LRC格式的时间戳 [mm:ss.mm]"""
+    """将毫秒转换为LRC格式的时间戳 [mm:ss.sss]"""
     seconds, ms = divmod(int(ms), 1000)
     minutes, seconds = divmod(seconds, 60)
     return f"{minutes:02d}:{seconds:02d}.{ms:03d}"
@@ -92,30 +92,9 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
 
                 all_lines.append((start_ms, line_text, 'original'))
 
-        # 解析翻译行
-        if trans:
-            trans_pattern = r'\[(\d\d:\d\d\.\d\d)\](.*?)(?=\n\[|$)'
-            trans_matches = re.findall(trans_pattern, trans, re.DOTALL)
-
-            # 为每个翻译行添加结束时间戳
-            for i, (time_str, content) in enumerate(trans_matches):
-                start_ms = timestamp_to_ms(time_str)
-
-                # 使用下一行的开始时间作为当前行的结束时间，如果是最后一行，使用一个较大的值
-                if i < len(trans_matches) - 1:
-                    end_ms = timestamp_to_ms(trans_matches[i+1][0])
-                else:
-                    # 假设最后一行的持续时间为5秒
-                    end_ms = start_ms + 5000
-
-                end_timestamp = ms_to_timestamp(end_ms)
-                line_text = f"[{time_str}]{content.strip()}[{end_timestamp}]"
-
-                all_lines.append((start_ms, line_text, 'trans'))
-
-        # 解析罗马音行 - 修改为XML格式处理
+        # 解析罗马音行 - XML格式
         if roma:
-            # 从XML中提取LyricContent
+            # 尝试从XML中提取LyricContent
             roma_match = re.search(r'LyricContent="([^"]+)"', roma)
             if roma_match:
                 roma_content = roma_match.group(1).replace(
@@ -164,6 +143,11 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
 
                 # 为每个罗马音行添加结束时间戳
                 for i, (time_str, content) in enumerate(roma_matches):
+                    # 过滤空行和注释行
+                    content = content.strip()
+                    if not content or content.startswith('//'):
+                        continue
+
                     start_ms = timestamp_to_ms(time_str)
 
                     # 使用下一行的开始时间作为当前行的结束时间，如果是最后一行，使用一个较大的值
@@ -174,12 +158,71 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
                         end_ms = start_ms + 5000
 
                     end_timestamp = ms_to_timestamp(end_ms)
-                    line_text = f"[{time_str}]{content.strip()}[{end_timestamp}]"
+                    line_text = f"[{time_str}]{content}[{end_timestamp}]"
 
                     all_lines.append((start_ms, line_text, 'roma'))
 
-        # 按时间戳排序所有行
+        # 解析翻译行
+        if trans:
+            trans_pattern = r'\[(\d\d:\d\d\.\d\d)\](.*?)(?=\n\[|$)'
+            trans_matches = re.findall(trans_pattern, trans, re.DOTALL)
+
+            # 为每个翻译行添加结束时间戳
+            for i, (time_str, content) in enumerate(trans_matches):
+                # 过滤空行和注释行
+                content = content.strip()
+                if not content or content.startswith('//'):
+                    continue
+
+                start_ms = timestamp_to_ms(time_str)
+
+                # 使用下一行的开始时间作为当前行的结束时间，如果是最后一行，使用一个较大的值
+                if i < len(trans_matches) - 1:
+                    end_ms = timestamp_to_ms(trans_matches[i+1][0])
+                else:
+                    # 假设最后一行的持续时间为5秒
+                    end_ms = start_ms + 5000
+
+                end_timestamp = ms_to_timestamp(end_ms)
+                line_text = f"[{time_str}]{content}[{end_timestamp}]"
+
+                all_lines.append((start_ms, line_text, 'trans'))
+
+        # 首先按时间戳排序所有行
         all_lines.sort(key=lambda x: x[0])
+
+        # 使用类型优先级对相同时间戳的行进行再排序
+        sorted_lines = []
+        current_time = -1
+        temp_lines = {}
+
+        for time_ms, line_text, line_type in all_lines:
+            # 过滤空行和注释行，检查时间戳后面的内容
+            match = re.search(r'\[\d\d:\d\d\.\d\d\](.*?)(?=\[|$)', line_text)
+            if match:
+                content = match.group(1).strip()
+                if not content or content.startswith('//'):
+                    continue
+
+            # 如果时间戳改变，处理之前收集的行
+            if time_ms != current_time and current_time != -1:
+                # 按照roma、original、trans的顺序添加
+                for type_name in ['roma', 'original', 'trans']:
+                    if type_name in temp_lines:
+                        sorted_lines.append(
+                            (current_time, temp_lines[type_name], type_name))
+                temp_lines = {}
+
+            # 更新当前时间戳和临时存储
+            current_time = time_ms
+            temp_lines[line_type] = line_text
+
+        # 处理最后一组
+        if temp_lines:
+            for type_name in ['roma', 'original', 'trans']:
+                if type_name in temp_lines:
+                    sorted_lines.append(
+                        (current_time, temp_lines[type_name], type_name))
 
         # 构建输出文件名
         base_name = os.path.basename(json_file)
@@ -190,15 +233,20 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
         with open(output_file, 'w', encoding='utf-8') as f:
             # 写入头部信息
             for header in headers:
-                if header.endswith("\n"):
+                if header.endswith("\n") or header.endswith("\r") or header.endswith("\r\n"):
                     f.write(header)
                 else:
                     f.write(header + "\n")
 
-            f.write("\n")
-
-            # 写入排序后的所有行
-            for _, line_text, _ in all_lines:
+            # 写入排序后的所有行，过滤空行和注释行
+            for _, line_text, _ in sorted_lines:
+                # 最后一次检查确保不写入空行或注释行
+                match = re.search(
+                    r'\[\d\d:\d\d\.\d\d\](.*?)(?=\[|$)', line_text)
+                if match:
+                    content = match.group(1).strip()
+                    if not content or content.startswith('//'):
+                        continue
                 f.write(line_text + "\n")
 
         print(f"成功转换: {output_file}")
@@ -210,9 +258,7 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
 
 
 def main():
-    # 处理目录中的所有JSON文件
-    import glob
-    json_files = "json\lyrics_parser_word_by_word.json"
+    json_files = "json\lyrics_parser_word_by_word_older.json"
     print(f"处理文件: {json_files}")
     parse_json_to_lrc(json_files)
 
