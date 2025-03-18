@@ -1,7 +1,7 @@
 import base64
 from typing import Dict
 from decryptor import qrc_decrypt
-from utils.enum import QrcType, SearchType
+from utils.menum import QrcType, SearchType
 
 class MusicDataParser:
     """音乐数据解析器"""

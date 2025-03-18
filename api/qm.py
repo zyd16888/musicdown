@@ -1,16 +1,20 @@
-import httpx
-import time
 import random
-from typing import Dict, List, Optional
+import time
 from base64 import encode
-from utils.enum import RequestMethod, SearchType
-from utils.parser import MusicDataParser
+from typing import Dict
+
+import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+from utils.config import config
+from utils.menum import RequestMethod, SearchType
+from utils.parser import MusicDataParser
+
 
 class QQMusicAPI:
     """QQ音乐API封装类（异步版本）"""
 
-    def __init__(self,  user_agent: str = None):
+    def __init__(self, user_agent: str = None):
         """初始化API类
 
         Args:
@@ -51,8 +55,10 @@ class QQMusicAPI:
         )
         self.parser = MusicDataParser()
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)))
-    async def _make_request(self, url: str, method: str, payload: Dict = None, params: Dict = None, headers: Dict = None) -> Dict:
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10),
+           retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)))
+    async def _make_request(self, url: str, method: str, payload: Dict = None, params: Dict = None,
+                            headers: Dict = None) -> Dict:
         """通用异步请求方法
 
         Args:
@@ -80,7 +86,8 @@ class QQMusicAPI:
         except httpx.RequestError as e:
             raise Exception(f"请求失败: {str(e)}")
 
-    async def search(self, query: str, search_type: SearchType = SearchType.SONG, page: int = 1, limit: int = 10) -> Dict:
+    async def search(self, query: str, search_type: SearchType = SearchType.SONG, page: int = 1,
+                     limit: int = 10) -> Dict:
         """异步搜索音乐
 
         Args:
@@ -154,7 +161,8 @@ class QQMusicAPI:
         response = await self._make_request(self.base_url, RequestMethod.POST, payload)
         return self.parser.parse_playlist(response)
 
-    async def get_word_by_word_lyrics(self, songmid: str = None, songID: int = None, album_name: str = None, singer_name: str = None, song_name: str = None) -> Dict:
+    async def get_word_by_word_lyrics(self, songmid: str = None, songID: int = None, album_name: str = None,
+                                      singer_name: str = None, song_name: str = None) -> Dict:
         """异步获取逐字歌词（加密）
 
         Args:
@@ -223,7 +231,7 @@ class QQMusicAPI:
         response = await self._make_request(self.lyric_url, RequestMethod.GET, params=params, headers=headers)
         return self.parser.parse_lyrics(response)
 
-    async def get_song_url(self, songmid: str, filetype: str = '128', cookie: str = None) -> Dict:
+    async def get_song_url(self, songmid: str, filetype: str = '128', cookie: str = config.QQMUSIC_COOKIE) -> Dict:
         """异步获取歌曲URL
 
         Args:
@@ -300,7 +308,7 @@ class QQMusicAPI:
         """
         url = f"https://y.qq.com/music/photo_new/T002R800x800M000{album_mid}.jpg?max_age=2592000"
         return url
-    
+
     async def get_song_image_bytes(self, album_mid: str) -> bytes:
 
         url = f"https://y.qq.com/music/photo_new/T002R800x800M000{album_mid}.jpg?max_age=2592000"

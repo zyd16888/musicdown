@@ -1,15 +1,16 @@
-from tgbot.utils.message_builders import build_search_results_message
-from utils.config import config
-from utils.enum import SearchType
-from api.qm import QQMusicAPI
 import sys
 from pathlib import Path
+
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery
 
+from api.qm import QQMusicAPI
+from tgbot.utils.message_builders import build_search_results_message
+from utils.config import config
+from utils.menum import SearchType
+
 # 确保可以导入项目根目录的模块
 sys.path.append(str(Path(__file__).parent.parent.parent))
-
 
 # 初始化QQ音乐API
 qq_music_api = QQMusicAPI()
@@ -33,7 +34,6 @@ def register(app: Client):
             try:
                 # 获取下一页搜索结果
                 search_result = await qq_music_api.search(query, SearchType.SONG, page=next_page, limit=10)
-                print(search_result)
 
                 if search_result['code'] == -1 or not search_result.get('songs'):
                     await callback_query.answer("没有更多结果了")

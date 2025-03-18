@@ -1,15 +1,16 @@
-from tgbot.utils.message_builders import build_search_results_message
-from utils.config import config
-from utils.enum import SearchType
-from api.qm import QQMusicAPI
 import sys
 from pathlib import Path
+
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
+from api.qm import QQMusicAPI
+from tgbot.utils.message_builders import build_search_results_message
+from utils.config import config
+from utils.menum import SearchType
+
 # 确保可以导入项目根目录的模块
 sys.path.append(str(Path(__file__).parent.parent.parent))
-
 
 # 初始化QQ音乐API
 qq_music_api = QQMusicAPI()

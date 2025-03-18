@@ -1,4 +1,5 @@
 from typing import Dict, List, Tuple
+
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from utils.formatters import format_singers, format_interval
@@ -14,9 +15,10 @@ def build_search_results_message(songs: List[Dict], header: str = "") -> Tuple[s
     keyboard = []
 
     for i, song in enumerate(songs):
-        text += f"{i+1}. {song['name']} - {format_singers(song['singer'])} | 专辑: {song['album']['name']} | 时长: {format_interval(song['interval'])} \n"
+        text += f"{i + 1}. {song['name']} - {format_singers(song['singer'])} | 专辑: {song['album']['name']} | 时长: {format_interval(song['interval'])} \n"
         keyboard.append([InlineKeyboardButton(
-            f"{i+1}. {song['name']} - {format_singers(song['singer'])} | 时长: {format_interval(song['interval'])}", callback_data=f"song:{i}")])
+            f"{i + 1}. {song['name']} - {format_singers(song['singer'])} | 时长: {format_interval(song['interval'])}",
+            callback_data=f"song:{i}")])
 
     # 添加翻页按钮
     nav_buttons = []
@@ -37,8 +39,8 @@ def build_album_results_message(songs: List[Dict]) -> Tuple[str, InlineKeyboardM
 
     for i, song in enumerate(songs):
         song_info = song['songInfo'] if 'songInfo' in song else song
-        text += f"{i+1}. {song_info['name']} - {format_singers(song_info['singer'])}\n"
+        text += f"{i + 1}. {song_info['name']} - {format_singers(song_info['singer'])}\n"
         keyboard.append([InlineKeyboardButton(
-            f"{i+1}. {song_info['name']}", callback_data=f"song:{i}")])
+            f"{i + 1}. {song_info['name']}", callback_data=f"song:{i}")])
 
     return text, InlineKeyboardMarkup(keyboard)
