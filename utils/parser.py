@@ -1,6 +1,5 @@
-import json
 import base64
-from typing import Dict, List, Optional, Union
+from typing import Dict
 from decryptor import qrc_decrypt
 from utils.enum import QrcType, SearchType
 

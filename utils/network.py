@@ -19,7 +19,11 @@ class NetworkManager:
     async def _ensure_async_client(self):
         """确保异步客户端存在"""
         if self.async_client is None:
-            self.async_client = httpx.AsyncClient(verify=False, trust_env=False, timeout=10.0)
+            self.async_client = httpx.AsyncClient(limits=httpx.Limits(max_connections=100,
+                                                                      max_keepalive_connections=20),
+                                                  verify=False,
+                                                  trust_env=False,
+                                                  timeout=10.0)
         return self.async_client
 
     async def close(self):

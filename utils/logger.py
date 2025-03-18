@@ -3,7 +3,8 @@ import logging
 import os
 import sys
 import time
-from logging import CRITICAL, DEBUG, ERROR, INFO, NOTSET, WARNING, LogRecord
+from logging import CRITICAL, DEBUG, ERROR, INFO, NOTSET, WARNING
+from datetime import datetime
 
 
 
@@ -16,6 +17,7 @@ class Logger:
         self.name = 'LDDC'
         self.__logger = logging.getLogger(self.name)
         self.level = self.str2log_level("DEBUG")
+        self.last_progress = None  # 添加进度跟踪变量
 
         formatter = logging.Formatter('[%(levelname)s]%(asctime)s- %(module)s(%(lineno)d) - %(funcName)s:%(message)s')
         # 创建一个处理器,用于将日志写入文件
@@ -66,6 +68,31 @@ class Logger:
             case _:
                 msg = f"Invalid log level: {level}"
                 raise ValueError(msg)
+
+    def log_progress(self, message: str, level: str = "INFO") -> None:
+        """处理进度显示的日志消息
+        
+        Args:
+            message: 日志消息内容
+            level: 日志级别，可选值为 "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_method = getattr(self, level.lower(), self.info)
+
+        if "进度:" in message:
+            # 使用 \r 来覆盖当前行显示进度
+            print(f"\r[{timestamp}] [{level}] {message}", end='', flush=True)
+            self.last_progress = message
+        else:
+            # 如果上一条是进度消息，先打印换行
+            if self.last_progress:
+                print()
+                self.last_progress = None
+            # 其他消息正常打印并换行
+            print(f"[{timestamp}] [{level}] {message}")
+
+        # 使用对应级别的日志方法记录
+        log_method(message)
 
 
 logger = Logger()
