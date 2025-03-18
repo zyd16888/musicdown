@@ -6,16 +6,16 @@ from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery
 
 from api.qm import QQMusicAPI
-from downloader.downloader import DownloadManager
+from downloader.music_downloader import MusicDownloader
 from utils.config import config
-from utils.formatters import format_singers, get_file_path
+from utils.formatters import format_singers
 
 # 确保可以导入项目根目录的模块
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # 初始化QQ音乐API和下载管理器
 qq_music_api = QQMusicAPI()
-download_manager = DownloadManager()
+music_downloader = MusicDownloader()
 
 
 def register(app: Client):
@@ -41,21 +41,10 @@ def register(app: Client):
         )
 
         try:
-            # 获取歌曲下载链接
-            song_url_result = await qq_music_api.get_song_url(selected_song['mid'], filetype='m4a')
+            # 使用 MusicDownloader 下载并处理歌曲
+            filepath = await music_downloader.download_song(selected_song, filetype='m4a')
 
-            if song_url_result['code'] == -1 or not song_url_result.get('url'):
-                await callback_query.edit_message_text("❌ 无法获取歌曲下载链接，可能是版权限制。")
-                return
-
-            # 准备下载
-            song_url = song_url_result['url']
-            filepath = await get_file_path(selected_song, song_url)
-
-            # 下载歌曲
-            download_success = await download_manager.download_with_progress(song_url, filepath)
-
-            if not download_success:
+            if not filepath:
                 await callback_query.edit_message_text("❌ 下载歌曲失败，请稍后重试。")
                 return
 
@@ -63,7 +52,7 @@ def register(app: Client):
             album_mid = selected_song['album']['mid']
             cover_path = None
             try:
-                cover_path = await download_manager.download_album_cover(album_mid)
+                cover_path = await music_downloader.download_manager.download_album_cover(album_mid)
             except:
                 pass  # 如果封面下载失败，继续而不使用封面
 
@@ -84,7 +73,8 @@ def register(app: Client):
 
             # 清理下载文件
             try:
-                os.remove(filepath)
+                if filepath.exists():
+                    os.remove(filepath)
                 if cover_path and os.path.exists(cover_path):
                     os.remove(cover_path)
             except:

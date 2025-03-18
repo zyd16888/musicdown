@@ -61,6 +61,9 @@ class MusicDownloader:
             # 4. 下载歌词
             lyrics = await self.qq_music_api.get_lyrics(song_info['mid'])
 
+            # 4.1 下载逐字歌词（暂时放弃，没有播放器支持）
+            # lyrics_wbw = await self.qq_music_api.get_word_by_word_lyrics(song_info['mid'])
+
             # 5. 只添加封面和歌词到音频文件
             self.log("添加封面和歌词到音频文件...")
             processed_filepath = await self._add_cover_and_lyrics(
