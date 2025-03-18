@@ -61,12 +61,18 @@ class Config:
     DEFAULT_QUALITY: int = 11
     BLOCK_SIZE: int = 8192
     PROGRESS_UPDATE_INTERVAL: float = 0.5
-    QQMUSIC_COOKIE: str = config_file.get("qqmusic.cookie")
-    API_ID: str = config_file.get("tgbot.appId")
-    API_HASH: str = config_file.get("tgbot.apiHash")
-    BOT_TOKEN: str = config_file.get("tgbot.botToken")
+    QQMUSIC_COOKIE: str = field(init=False)
+    API_ID: str = field(init=False)
+    API_HASH: str = field(init=False)
+    BOT_TOKEN: str = field(init=False)
     # 用户会话状态存储
     user_sessions = {}
+
+    def __post_init__(self):
+        self.QQMUSIC_COOKIE = self.config_file.get("qqmusic.cookie", "")
+        self.API_ID = self.config_file.get("tgbot.appId", "")
+        self.API_HASH = self.config_file.get("tgbot.apiHash", "")
+        self.BOT_TOKEN = self.config_file.get("tgbot.botToken", "")
 
 
 config = Config()

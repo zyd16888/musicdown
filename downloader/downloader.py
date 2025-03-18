@@ -1,10 +1,12 @@
 import time
 from pathlib import Path
+
 import humanize
 
-from utils.network import network
 from utils.config import config
+from utils.decorator import ensure_downloads_dir
 from utils.logger import logger
+from utils.network import network
 
 
 class DownloadManager:
@@ -13,6 +15,7 @@ class DownloadManager:
     def __init__(self):
         self.log = logger.log_progress
 
+    @ensure_downloads_dir
     async def download_with_progress(self, url: str, filepath: Path) -> bool:
         """带进度和速度显示的下载函数"""
         try:
@@ -38,7 +41,7 @@ class DownloadManager:
                                 downloaded, total_size, start_time, current_time)
                             last_update_time = current_time
 
-                self.log("音频文件下载完成！")
+                self.log("文件下载完成！")
                 return True
 
         except Exception as e:
@@ -53,3 +56,15 @@ class DownloadManager:
             progress = (downloaded / total_size * 100) if total_size else 0
             self.log(
                 f"下载进度: {progress:.1f}% | 速度: {humanize.naturalsize(speed)}/s")
+
+    async def download_album_cover(self, album_mid: str) -> Path:
+        """下载专辑封面并返回本地文件路径"""
+        cover_url = f"https://y.qq.com/music/photo_new/T002R800x800M000{album_mid}.jpg?max_age=2592000"
+        cover_path = config.DOWNLOADS_DIR / f"cover_{album_mid}.jpg"
+
+        try:
+            # 使用下载管理器下载封面
+            await self.download_with_progress(cover_url, cover_path)
+            return cover_path
+        except Exception:
+            return None
