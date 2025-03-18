@@ -1,0 +1,18 @@
+# Telegram Bot API
+pyrogram>=2.0.0
+tgcrypto  # Pyrogram的推荐依赖
+
+# 音频处理
+mutagen>=1.45.0  # 音频元数据处理
+
+# HTTP 请求
+httpx>=0.24.0  # 异步HTTP客户端
+
+# 工具包
+humanize>=4.0.0  # 文件大小格式化
+python-dotenv>=1.0.0  # 环境变量管理
+pydantic>=2.0.0  # 数据验证
+
+tomli
+tomli_w
+
