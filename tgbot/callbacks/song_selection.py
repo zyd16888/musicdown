@@ -1,7 +1,3 @@
-from utils.formatters import format_singers
-from utils.config import config
-from downloads.downloader import DownloadManager
-from api.qm import QQMusicAPI
 import os
 import sys
 from pathlib import Path
@@ -10,9 +6,13 @@ from urllib.parse import urlparse
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery
 
+from api.qm import QQMusicAPI
+from downloads.downloader import DownloadManager
+from utils.config import config
+from utils.formatters import format_singers
+
 # 确保可以导入项目根目录的模块
 sys.path.append(str(Path(__file__).parent.parent.parent))
-
 
 # 初始化QQ音乐API和下载管理器
 qq_music_api = QQMusicAPI()
@@ -44,8 +44,6 @@ def register(app: Client):
         try:
             # 获取歌曲下载链接
             song_url_result = await qq_music_api.get_song_url(selected_song['mid'], filetype='m4a')
-
-            print(song_url_result)
 
             if song_url_result['code'] == -1 or not song_url_result.get('url'):
                 await callback_query.edit_message_text("❌ 无法获取歌曲下载链接，可能是版权限制。")

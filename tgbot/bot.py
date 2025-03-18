@@ -1,9 +1,10 @@
-from utils.config import config
-from pyrogram import Client
-from pathlib import Path
 import importlib
-import os
 import sys
+from pathlib import Path
+
+from pyrogram import Client
+
+from utils.config import config
 
 # 确保可以导入项目根目录的模块
 sys.path.append(str(Path(__file__).parent.parent))
