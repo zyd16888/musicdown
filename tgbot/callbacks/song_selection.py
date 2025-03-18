@@ -42,7 +42,7 @@ def register(app: Client):
 
         try:
             # 使用 MusicDownloader 下载并处理歌曲
-            filepath = await music_downloader.download_song(selected_song, filetype='m4a')
+            filepath = await music_downloader.download_song(selected_song, filetype='flac')
 
             if not filepath:
                 await callback_query.edit_message_text("❌ 下载歌曲失败，请稍后重试。")
