@@ -299,6 +299,11 @@ class MusicDataParser:
                                 'mid': s.get('mid', ''),
                                 'name': s.get('name', '')
                             } for s in songInfo.get('singer', [])],
+                            'album': {
+                                'id': songInfo['album'].get('id', ''),
+                                'mid': songInfo['album'].get('mid', ''),
+                                'name': songInfo['album'].get('name', '')
+                            },
                             'interval': songInfo.get('interval', 0)
                         }
                         result['songList'].append(song_info)
