@@ -29,14 +29,15 @@ def get_audio_extension(url: str) -> str:
     return ext
 
 
-async def get_file_path(selected_song: Dict, song_url: str):
+async def get_file_path(selected_song: Dict, song_url: str, download_dir: Path = config.DOWNLOADS_DIR):
     """获取下载文件路径"""
     ext = get_audio_extension(song_url)
     filename = f"{selected_song['name']}-{format_singers(selected_song['singer'])}{ext}"
     safe_filename = "".join(
         c for c in filename if c.isalnum() or c in " -_.").strip()
-    filepath = config.DOWNLOADS_DIR / safe_filename
-    return filepath
+    filepath = f"{download_dir}/{safe_filename}"
+
+    return Path(filepath)
 
 
 def _ms_to_timestamp(ms):

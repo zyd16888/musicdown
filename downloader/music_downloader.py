@@ -13,7 +13,7 @@ from mutagen.oggvorbis import OggVorbis
 
 from api.qm import QQMusicAPI
 from downloader.downloader import DownloadManager
-from utils.formatters import format_singers, get_file_path
+from utils.formatters import format_singers, get_file_path, parse_lrc_lyrics
 from utils.logger import logger
 
 
@@ -25,7 +25,7 @@ class MusicDownloader:
         self.download_manager = DownloadManager()
         self.log = logger.log_progress
 
-    async def download_song(self, song_info: Dict, filetype: str = 'm4a') -> Optional[Path]:
+    async def download_song(self, song_info: Dict, download_dir: Path, filetype: str = 'm4a') -> Optional[Path]:
         """下载歌曲并处理封面、歌词等
 
         Args:
@@ -47,7 +47,9 @@ class MusicDownloader:
 
             # 2. 下载歌曲
             song_url = song_url_result['url']
-            temp_filepath = await get_file_path(song_info, song_url)
+            self.log(f"download_dir: {download_dir}")
+            temp_filepath = await get_file_path(song_info, song_url, download_dir)
+            self.log(f"下载歌曲路径: {temp_filepath}")
             download_success = await self.download_manager.download_with_progress(song_url, temp_filepath)
 
             if not download_success:
@@ -61,6 +63,8 @@ class MusicDownloader:
             # 4. 下载歌词
             lyrics = await self.qq_music_api.get_lyrics(song_info['mid'])
 
+            lrc_lyrics = parse_lrc_lyrics(lyrics)
+
             # 4.1 下载逐字歌词（暂时放弃，没有播放器支持）
             # lyrics_wbw = await self.qq_music_api.get_word_by_word_lyrics(song_info['mid'])
 
@@ -69,7 +73,7 @@ class MusicDownloader:
             processed_filepath = await self._add_cover_and_lyrics(
                 temp_filepath,
                 cover_path,
-                lyrics.get('lyric', '')
+                lrc_lyrics
             )
 
             # 6. 清理临时文件
