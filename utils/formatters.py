@@ -75,9 +75,9 @@ def parse_word_by_word_lyrics(lyrics_data: Dict, isTrans: bool = False, isRoma: 
     all_lines = []
 
     headers = _parse_headers(lyric)
-    lrc_original = _parse_lyrics(lyric, "original")
-    lrc_trans = _parse_lyrics(trans, "trans")
-    lrc_roma = _parse_lyrics(roma, "roma")
+    lrc_original = _parse_wbw_lyrics(lyric, "original")
+    lrc_trans = _parse_wbw_lyrics(trans, "trans")
+    lrc_roma = _parse_wbw_lyrics(roma, "roma")
 
     all_lines.extend(lrc_original)
     if isTrans:
@@ -125,7 +125,7 @@ def parse_word_by_word_lyrics(lyrics_data: Dict, isTrans: bool = False, isRoma: 
     return lrc_content
 
 
-def _parse_lyrics(lyric_str: str, lyric_type: str) -> list[tuple[int, str, str]]:
+def _parse_wbw_lyrics(lyric_str: str, lyric_type: str) -> list[tuple[int, str, str]]:
     """解析歌词数据，转换为LRC格式"""
     lines = []
     # 判断是否为XML格式
@@ -216,3 +216,45 @@ def _parse_headers(lyric_str: str) -> list[str]:
         if re.match(r'\[(ti|ar|al|by|offset):', line):
             headers.append(line)
     return headers
+
+
+def parse_lrc_lyrics(lyric_data: Dict):
+    """解析LRC歌词数据"""
+    lyric = lyric_data.get("lyric", "")
+    trans = lyric_data.get("trans", "")
+
+    headers = _parse_headers(lyric)
+    original_lines = _parse_lyric_lines(lyric)
+    translate_lines = _parse_lyric_lines(trans)
+
+    lyrics_content = []
+
+    for header in headers:
+        if header.endswith("\n") or header.endswith("\r") or header.endswith("\r\n"):
+            lyrics_content.append(header)
+        else:
+            lyrics_content.append(header + "\n")
+
+    for time_tag, original in original_lines.items():
+        lyrics_content.append(f"{time_tag}{original}")
+        if time_tag in translate_lines:
+            if translate_lines[time_tag].startswith("//") or not translate_lines[time_tag]:
+                continue
+            lyrics_content.append(f"{time_tag}{translate_lines[time_tag]}")
+
+    return "\n".join(lyrics_content)
+
+
+def _parse_lyric_lines(lyric: str):
+    """解析歌词行"""
+    lines = {}
+    for line in lyric.split('\n'):
+        if line.strip() and '[' in line:
+            try:
+                time_tag = line[line.find('['):line.find(']') + 1]
+                content = line[line.find(']') + 1:].strip()
+                if content:
+                    lines[time_tag] = content
+            except:
+                continue
+    return lines

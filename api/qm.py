@@ -225,7 +225,9 @@ class QQMusicAPI:
             "_": time.time(),
             "format": "json",
             "songmid": songmid,
-            "loginUin": self.uin
+            "loginUin": self.uin,
+            "platform": "yqq",
+            "g_tk": 5381,
         }
         headers = {"Referer": "https://y.qq.com/"}
         response = await self._make_request(self.lyric_url, RequestMethod.GET, params=params, headers=headers)
