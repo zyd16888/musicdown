@@ -15,7 +15,7 @@ class DownloadManager:
     def __init__(self):
         self.log = logger.log_progress
 
-    @ensure_downloads_dir
+
     async def download_with_progress(self, url: str, filepath: Path) -> bool:
         """带进度和速度显示的下载函数"""
         try:
