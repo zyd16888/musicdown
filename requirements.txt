@@ -17,3 +17,5 @@ tomli
 tomli_w
 tenacity
 urllib3
+
+PyQt6

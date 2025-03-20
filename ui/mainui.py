@@ -172,7 +172,8 @@ class QQMusicDownloaderGUI(QMainWindow):
     def initUI(self):
         """初始化UI"""
         self.setWindowTitle("QQ音乐下载器")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setWindowIcon(QIcon("ui/icon.ico"))
+        self.setGeometry(100, 100, 700, 400)
 
         # 主布局
         main_widget = QWidget()
@@ -526,15 +527,15 @@ class QQMusicDownloaderGUI(QMainWindow):
             self.result_table.setRowCount(len(self.search_results))
             for i, playlist in enumerate(self.search_results):
                 self.result_table.setItem(
-                    i, 0, QTableWidgetItem(playlist["name"]))
+                    i, 0, QTableWidgetItem(playlist["dissname"]))
                 self.result_table.setItem(
                     i, 1, QTableWidgetItem(playlist["creator"]["name"]))
                 self.result_table.setItem(
-                    i, 2, QTableWidgetItem(str(playlist["songCount"])))
+                    i, 2, QTableWidgetItem(str(playlist["song_count"])))
 
                 view_btn = QPushButton("查看歌曲")
                 view_btn.clicked.connect(
-                    lambda checked, disstid=playlist["id"]: self.get_playlist(disstid))
+                    lambda checked, disstid=int(playlist["dissid"]): self.get_playlist(disstid))
                 self.result_table.setCellWidget(i, 3, view_btn)
 
     def get_album_songs(self, album_mid):
@@ -623,7 +624,7 @@ class QQMusicDownloaderGUI(QMainWindow):
                 lambda checked, song_index=i: self.download_song(songs[song_index]))
             self.result_table.setCellWidget(i, 5, download_btn)
 
-    def get_playlist(self, disstid):
+    def get_playlist(self, disstid: int):
         """获取歌单歌曲"""
         self.current_worker = WorkerThread(
             "get_playlist", api=self.api, params={"disstid": disstid})
