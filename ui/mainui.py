@@ -143,7 +143,7 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.downloader = MusicDownloader()
 
         # 设置配置文件路径
-        self.config_dir = Path.home() / ".qqmusic_downloader"
+        self.config_dir = Path(sys.argv[0]).parent
         self.config_file = self.config_dir / "config.json"
 
         # 存储搜索结果
@@ -153,6 +153,9 @@ class QQMusicDownloaderGUI(QMainWindow):
 
         # 设置下载路径
         self.download_path = str(Path.home() / "Downloads")
+
+        # 默认音质设置
+        self._saved_quality = "320"  # 添加默认音质设置
 
         # 存储当前活动的工作线程
         self.current_worker = None
@@ -282,7 +285,20 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.quality_320 = QRadioButton("MP3 320kbps")
         self.quality_flac = QRadioButton("FLAC")
 
-        self.quality_320.setChecked(True)  # 默认选择320kbps
+        # 根据保存的设置选择音质
+        quality_map = {
+            "m4a": self.quality_m4a,
+            "128": self.quality_128,
+            "320": self.quality_320,
+            "flac": self.quality_flac
+        }
+        selected_quality = quality_map.get(
+            self._saved_quality, self.quality_320)
+        selected_quality.setChecked(True)
+
+        # 添加音质变化的事件处理
+        for radio in [self.quality_m4a, self.quality_128, self.quality_320, self.quality_flac]:
+            radio.toggled.connect(self.save_config)
 
         quality_layout.addWidget(self.quality_m4a)
         quality_layout.addWidget(self.quality_128)
@@ -867,6 +883,8 @@ class QQMusicDownloaderGUI(QMainWindow):
                     self.download_path = config.get(
                         'download_path', str(Path.home() / "Downloads"))
                     saved_cookie = config.get('cookie', '')
+                    self._saved_quality = config.get(
+                        'quality', '320')  # 加载音质设置
                     if hasattr(self, 'cookie_input'):  # 如果UI已经初始化
                         self.cookie_input.setText(saved_cookie)
                     else:  # 如果UI还没初始化，保存cookie以供后续使用
@@ -879,7 +897,8 @@ class QQMusicDownloaderGUI(QMainWindow):
         try:
             config = {
                 'download_path': self.download_path,
-                'cookie': self.cookie_input.text().strip()
+                'cookie': self.cookie_input.text().strip(),
+                'quality': self.get_selected_quality()  # 保存音质设置
             }
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)

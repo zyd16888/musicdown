@@ -1,11 +1,8 @@
 # config_manager.py
 import os
+import json
 from dataclasses import field, dataclass
 from pathlib import Path
-
-import tomli
-import tomli_w
-
 
 class ConfigManager:
     _instances = {}
@@ -23,15 +20,15 @@ class ConfigManager:
 
     def load_config(self):
         if os.path.exists(self.config_file):
-            with open(self.config_file, "rb") as f:
-                self.config = tomli.load(f)
+            with open(self.config_file, "r", encoding='utf-8') as f:
+                self.config = json.load(f)
         else:
             self.config = {}
             self.save_config()
 
     def save_config(self):
-        with open(self.config_file, "wb") as f:
-            tomli_w.dump(self.config, f)
+        with open(self.config_file, "w", encoding='utf-8') as f:
+            json.dump(self.config, f, indent=4, ensure_ascii=False)
 
     def get(self, key_path: str, default=None):
         keys = key_path.split(".")
@@ -56,7 +53,7 @@ class ConfigManager:
 
 @dataclass
 class Config:
-    config_file = ConfigManager.get_instance("config.toml")
+    config_file = ConfigManager.get_instance("config.json")
     DOWNLOADS_DIR: Path = field(default=Path('downloads'))
     DEFAULT_QUALITY: int = 11
     BLOCK_SIZE: int = 8192
