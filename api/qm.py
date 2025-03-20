@@ -245,6 +245,9 @@ class QQMusicAPI:
         Returns:
             Dict: 歌曲URL信息
         """
+        if cookie is None:
+            cookie = config.QQMUSIC_COOKIE
+
         file_info = self.file_config[filetype]
         file = f"{file_info['s']}{songmid}{songmid}{file_info['e']}"
         payload = {
