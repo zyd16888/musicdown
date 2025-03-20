@@ -2,6 +2,7 @@ import asyncio
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+import json
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QIcon, QPixmap, QTextCursor
@@ -141,6 +142,10 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.api = QQMusicAPI()
         self.downloader = MusicDownloader()
 
+        # 设置配置文件路径
+        self.config_dir = Path.home() / ".qqmusic_downloader"
+        self.config_file = self.config_dir / "config.json"
+
         # 存储搜索结果
         self.search_results = []
         self.album_songs = []
@@ -154,6 +159,9 @@ class QQMusicDownloaderGUI(QMainWindow):
 
         # 初始化日志显示区域
         self.log_text = None
+
+        # 加载配置
+        self.load_config()
 
         # 初始化UI，应该放在所有属性初始化之后
         self.initUI()
@@ -252,8 +260,15 @@ class QQMusicDownloaderGUI(QMainWindow):
             QLabel("QQ音乐Cookie:"), 2, 0, Qt.AlignmentFlag.AlignTop)
         self.cookie_input = QLineEdit()
         self.cookie_input.setPlaceholderText("输入QQ音乐Cookie以下载高品质音乐...")
+        # 设置保存的cookie
+        if hasattr(self, '_saved_cookie'):
+            self.cookie_input.setText(self._saved_cookie)
+            del self._saved_cookie
         settings_layout.addWidget(
             self.cookie_input, 2, 1, 1, 2, Qt.AlignmentFlag.AlignTop)
+
+        # 添加cookie值变化的事件处理
+        self.cookie_input.textChanged.connect(self.save_config)
 
         # 音质选择
         settings_layout.addWidget(
@@ -837,3 +852,35 @@ class QQMusicDownloaderGUI(QMainWindow):
         if dir_path:
             self.download_path = dir_path
             self.path_input.setText(dir_path)
+            self.save_config()  # 保存配置
+
+    def load_config(self):
+        """加载配置文件"""
+        try:
+            # 确保配置目录存在
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+
+            if self.config_file.exists():
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.loads(f.read())
+                    self.download_path = config.get(
+                        'download_path', str(Path.home() / "Downloads"))
+                    saved_cookie = config.get('cookie', '')
+                    if hasattr(self, 'cookie_input'):  # 如果UI已经初始化
+                        self.cookie_input.setText(saved_cookie)
+                    else:  # 如果UI还没初始化，保存cookie以供后续使用
+                        self._saved_cookie = saved_cookie
+        except Exception as e:
+            print(f"加载配置文件失败: {e}")
+
+    def save_config(self):
+        """保存配置文件"""
+        try:
+            config = {
+                'download_path': self.download_path,
+                'cookie': self.cookie_input.text().strip()
+            }
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存配置文件失败: {e}")
