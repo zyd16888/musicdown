@@ -18,6 +18,7 @@ class Logger:
         self.__logger = logging.getLogger(self.name)
         self.level = self.str2log_level("DEBUG")
         self.last_progress = None  # 添加进度跟踪变量
+        self.ui_handlers = []  # 存储UI处理器
 
         formatter = logging.Formatter('[%(levelname)s]%(asctime)s- %(module)s(%(lineno)d) - %(funcName)s:%(message)s')
         # 创建一个处理器,用于将日志写入文件
@@ -93,6 +94,16 @@ class Logger:
 
         # 使用对应级别的日志方法记录
         log_method(message)
+
+    def add_handler(self, handler):
+        """添加新的日志处理器"""
+        handler.setLevel(self.level)
+        formatter = logging.Formatter(
+            '[%(levelname)s] %(asctime)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.__logger.addHandler(handler)
+        # 保存UI处理器引用
+        self.ui_handlers.append(handler)
 
 
 logger = Logger()
