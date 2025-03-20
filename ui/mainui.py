@@ -4,16 +4,17 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QIcon, QPixmap, QTextCursor
 from PyQt6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGridLayout,
                              QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QMainWindow, QMessageBox, QProgressBar, QPushButton,
                              QRadioButton, QTabWidget, QTableWidget,
-                             QTableWidgetItem, QVBoxLayout, QWidget)
+                             QTableWidgetItem, QVBoxLayout, QWidget, QTextEdit)
 
 from api.qm import QQMusicAPI
 from downloader.music_downloader import MusicDownloader
 from utils.menum import SearchType
+import logging
 
 
 class WorkerThread(QThread):
@@ -147,8 +148,14 @@ class QQMusicDownloaderGUI(QMainWindow):
         # 存储当前活动的工作线程
         self.current_worker = None
 
+        # 初始化日志显示区域
+        self.log_text = None
+
         # 初始化UI，应该放在所有属性初始化之后
         self.initUI()
+
+        # 注册日志处理器
+        self.setup_logger()
 
     def initUI(self):
         """初始化UI"""
@@ -287,9 +294,62 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.tabs.addTab(self.settings_tab, "下载设置")
         self.tabs.addTab(self.download_tab, "下载记录")
 
+        # 添加新的日志选项卡
+        self.log_tab = QWidget()
+        log_layout = QVBoxLayout(self.log_tab)
+
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.log_text.setStyleSheet("font-family: Courier, monospace;")
+
+        log_layout.addWidget(self.log_text)
+
+        # 清除日志按钮
+        clear_log_btn = QPushButton("清除日志")
+        clear_log_btn.clicked.connect(self.clear_log)
+        log_layout.addWidget(clear_log_btn)
+
+        self.tabs.addTab(self.log_tab, "下载日志")
+
         main_layout.addWidget(self.tabs)
 
         self.setCentralWidget(main_widget)
+
+    def setup_logger(self):
+        """设置日志处理器，将日志消息发送到UI"""
+        class UILogHandler(logging.Handler):
+            def __init__(self, ui_instance):
+                super().__init__()
+                self.ui = ui_instance
+
+            def emit(self, record):
+                msg = self.format(record)
+                self.ui.update_log(msg)
+
+        # 创建并添加UI日志处理器
+        ui_handler = UILogHandler(self)
+        formatter = logging.Formatter(
+            '[%(levelname)s] %(asctime)s - %(message)s')
+        ui_handler.setFormatter(formatter)
+
+        # 添加到logger
+        from utils.logger import logger
+        logger.add_handler(ui_handler)
+
+    def update_log(self, message):
+        """更新日志显示区域"""
+        if self.log_text:
+            self.log_text.append(message)
+            # 自动滚动到底部
+            cursor = self.log_text.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.log_text.setTextCursor(cursor)
+
+    def clear_log(self):
+        """清除日志显示"""
+        if self.log_text:
+            self.log_text.clear()
 
     def get_selected_quality(self) -> str:
         """获取选择的音质"""
@@ -475,6 +535,41 @@ class QQMusicDownloaderGUI(QMainWindow):
                 album_name = album.get("albumName", "未知专辑")
                 break
 
+        # 添加下载专辑所有歌曲的按钮
+        album_download_layout = QHBoxLayout()
+        self.select_all_btn = QPushButton("全选")
+        self.select_all_btn.clicked.connect(self.select_all_songs)
+
+        # 添加批量下载选中歌曲按钮
+        self.batch_download_btn = QPushButton("批量下载选中歌曲")
+        self.batch_download_btn.clicked.connect(self.batch_download)
+
+        self.download_album_btn = QPushButton("下载专辑所有歌曲")
+        self.download_album_btn.clicked.connect(
+            lambda: self.batch_download(songs))
+
+        album_download_layout.addWidget(self.select_all_btn)
+        album_download_layout.addWidget(self.batch_download_btn)
+        album_download_layout.addWidget(self.download_album_btn)
+        album_download_layout.addStretch()
+
+        # 在显示歌曲列表前添加下载专辑按钮
+        layout = self.search_tab.layout()
+        if layout.count() > 1:
+            # 移除原有的批量下载布局
+            old_layout = layout.itemAt(1).layout()
+            while old_layout.count():
+                item = old_layout.takeAt(0)
+                if item.widget():
+                    item.widget().hide()
+
+            # 删除旧布局
+            layout.removeItem(old_layout)
+
+        # 添加新布局
+        layout.addLayout(album_download_layout)
+
+        # 执行原有的歌曲列表填充代码
         for i, song in enumerate(songs):
             # 复选框
             checkbox = QTableWidgetItem()
@@ -487,8 +582,6 @@ class QQMusicDownloaderGUI(QMainWindow):
             self.result_table.setItem(i, 1, QTableWidgetItem(song["name"]))
             self.result_table.setItem(i, 2, QTableWidgetItem(
                 ", ".join([s["name"] for s in song["singer"]])))
-
-            # 添加专辑名称
             self.result_table.setItem(i, 3, QTableWidgetItem(album_name))
 
             # 时长
