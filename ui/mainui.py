@@ -76,7 +76,10 @@ class WorkerThread(QThread):
                 song_info = self.params["song_info"]
                 filetype = self.params["filetype"]
                 download_dir = self.params.get("download_dir")
-                result = await self.downloader.download_song(song_info, download_dir, filetype)
+                cookie = self.params.get("cookie", "")
+                print(f"cookie: {cookie}")
+                result = await self.downloader.download_song(song_info, download_dir, filetype, cookie)
+
                 self.update_signal.emit({
                     "type": "download_complete",
                     "data": {
@@ -91,11 +94,12 @@ class WorkerThread(QThread):
                 songs = self.params["songs"]
                 filetype = self.params["filetype"]
                 download_dir = self.params.get("download_dir")
+                cookie = self.params.get("cookie", "")
                 total = len(songs)
 
                 for i, song_info in enumerate(songs):
                     self.progress_signal.emit(i, total)
-                    result = await self.downloader.download_song(song_info, download_dir, filetype)
+                    result = await self.downloader.download_song(song_info, download_dir, filetype, cookie)
                     self.update_signal.emit({
                         "type": "download_progress",
                         "data": {
@@ -242,6 +246,14 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.browse_btn.clicked.connect(self.browse_path)
         settings_layout.addWidget(
             self.browse_btn, 0, 2, Qt.AlignmentFlag.AlignTop)
+
+        # 添加Cookie设置
+        settings_layout.addWidget(
+            QLabel("QQ音乐Cookie:"), 2, 0, Qt.AlignmentFlag.AlignTop)
+        self.cookie_input = QLineEdit()
+        self.cookie_input.setPlaceholderText("输入QQ音乐Cookie以下载高品质音乐...")
+        settings_layout.addWidget(
+            self.cookie_input, 2, 1, 1, 2, Qt.AlignmentFlag.AlignTop)
 
         # 音质选择
         settings_layout.addWidget(
@@ -643,6 +655,8 @@ class QQMusicDownloaderGUI(QMainWindow):
     def download_song(self, song_info):
         """下载单首歌曲"""
         filetype = self.get_selected_quality()
+        # 只有当用户输入了cookie时才使用用户的cookie
+        cookie = self.cookie_input.text().strip() or None
 
         # 使用用户设置的下载路径
         download_dir = Path(self.download_path)
@@ -668,7 +682,8 @@ class QQMusicDownloaderGUI(QMainWindow):
             params={
                 "song_info": song_info,
                 "filetype": filetype,
-                "download_dir": download_dir
+                "download_dir": download_dir,
+                "cookie": cookie  # 如果是None，会使用默认cookie
             }
         )
         self.current_worker.update_signal.connect(self.handle_worker_update)
@@ -703,6 +718,8 @@ class QQMusicDownloaderGUI(QMainWindow):
     def batch_download(self):
         """批量下载选中的歌曲"""
         selected_songs = []
+        # 只有当用户输入了cookie时才使用用户的cookie
+        cookie = self.cookie_input.text().strip() or None
 
         # 获取表格中当前显示的歌曲
         current_songs = []
@@ -754,7 +771,8 @@ class QQMusicDownloaderGUI(QMainWindow):
             params={
                 "songs": selected_songs,
                 "filetype": filetype,
-                "download_dir": download_dir
+                "download_dir": download_dir,
+                "cookie": cookie  # 如果是None，会使用默认cookie
             }
         )
         self.current_worker.update_signal.connect(self.handle_worker_update)

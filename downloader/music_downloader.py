@@ -25,12 +25,14 @@ class MusicDownloader:
         self.download_manager = DownloadManager()
         self.log = logger.log_progress
 
-    async def download_song(self, song_info: Dict, download_dir: Path, filetype: str = 'm4a') -> Optional[Path]:
+    async def download_song(self, song_info: Dict, download_dir: Path, filetype: str = 'm4a', cookie: str = None) -> Optional[Path]:
         """下载歌曲并处理封面、歌词等
 
         Args:
             song_info: 歌曲信息字典
+            download_dir: 下载目录
             filetype: 文件类型 ('m4a'/'128'/'320'/'flac')
+            cookie: QQ音乐Cookie
 
         Returns:
             处理完成的文件路径，失败则返回None
@@ -40,7 +42,7 @@ class MusicDownloader:
 
         try:
             # 1. 获取歌曲URL
-            song_url_result = await self.qq_music_api.get_song_url(song_info['mid'], filetype=filetype)
+            song_url_result = await self.qq_music_api.get_song_url(song_info['mid'], filetype=filetype, cookie=cookie)
             if song_url_result['code'] == -1 or not song_url_result.get('url'):
                 self.log("无法获取歌曲下载链接，可能是版权限制")
                 return None
