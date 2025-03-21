@@ -242,6 +242,51 @@ class WorkerThread(QThread):
                     "data": detailed_songs
                 })
 
+            elif self.task_type == "search_playlist_link_songs_one_by_one":
+                songs = self.params["songs"]
+                total = len(songs)
+
+                for i, song_str in enumerate(songs):
+                    # 解析歌曲字符串：歌曲名 - 歌手名
+                    parts = song_str.split(" - ", 1)
+                    song_name = parts[0].strip() if len(
+                        parts) > 0 else song_str
+                    artist_name = parts[1].strip() if len(parts) > 1 else ""
+
+                    # 构建搜索查询
+                    query = f"{song_name} {artist_name}"
+
+                    # 搜索歌曲
+                    search_result = await self.api.search(
+                        query,
+                        SearchType.SONG,
+                        1,  # 页码
+                        1    # 限制为1个结果
+                    )
+
+                    # 获取第一个匹配结果
+                    song_info = None
+                    if search_result and search_result.get("songs") and len(search_result["songs"]) > 0:
+                        song_info = search_result["songs"][0]
+
+                    # 立即发送单首歌曲搜索结果
+                    self.update_signal.emit({
+                        "type": "single_song_search_result",
+                        "index": i,  # 歌曲在列表中的索引
+                        "song_info": song_info,  # 歌曲信息
+                        "total": total,  # 总数
+                        "current": i + 1  # 当前进度
+                    })
+
+                    # 可以添加一个小延迟，避免界面更新过快
+                    await asyncio.sleep(0.05)
+
+                # 搜索全部完成后，可以再发送一个完成信号
+                self.update_signal.emit({
+                    "type": "playlist_link_search_complete",
+                    "total": total
+                })
+
         except Exception as e:
             self.error_signal.emit(str(e))
 
@@ -1161,82 +1206,95 @@ class QQMusicDownloaderGUI(QMainWindow):
         if not hasattr(self, 'playlist_link_original_songs') or not self.playlist_link_original_songs:
             return
 
-        # 显示加载状态
-        self.playlist_link_table.setRowCount(1)
-        self.playlist_link_table.setItem(
-            0, 1, QTableWidgetItem("正在获取歌曲详细信息..."))
-        self.playlist_link_table.setSpan(0, 1, 1, 4)  # 合并单元格
+        # 清空并准备表格
+        self.playlist_link_table.clearContents()
+        self.playlist_link_table.setRowCount(
+            len(self.playlist_link_original_songs))
+
+        # 初始化歌单歌曲详细信息存储
+        self.playlist_link_songs = [None] * \
+            len(self.playlist_link_original_songs)
+
+        # 设置所有行为"搜索中..."状态
+        for i in range(len(self.playlist_link_original_songs)):
+            # 在第一个单元格显示搜索状态
+            status_item = QTableWidgetItem("获取详细信息中...")
+            status_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self.playlist_link_table.setItem(i, 1, status_item)
+            self.playlist_link_table.setSpan(i, 1, 1, 4)  # 横向合并单元格
 
         # 禁用获取歌单按钮
         self.get_playlist_btn.setEnabled(False)
 
         # 启动批量搜索线程
         self.current_worker = WorkerThread(
-            "search_playlist_link_songs",
+            "search_playlist_link_songs_one_by_one",
             api=self.api,
             params={
                 "songs": self.playlist_link_original_songs
             }
         )
         self.current_worker.update_signal.connect(
-            self.handle_searched_playlist_songs)
+            self.handle_single_song_search_result)
         self.current_worker.error_signal.connect(self.handle_worker_error)
         self.current_worker.progress_signal.connect(
             self.handle_progress_update)
         self.current_worker.start()
 
     @pyqtSlot(dict)
-    def handle_searched_playlist_songs(self, data):
-        """处理搜索到的歌单歌曲详细信息"""
-        if data["type"] != "playlist_link_songs_details":
+    def handle_single_song_search_result(self, data):
+        """处理单首歌曲搜索结果"""
+        if data["type"] != "single_song_search_result":
             return
 
-        # 恢复获取歌单按钮
-        self.get_playlist_btn.setEnabled(True)
+        index = data["index"]
+        song_info = data["song_info"]
+        total_count = data["total"]
+        current_count = data["current"]
 
-        # 获取搜索结果
-        searched_songs = data["data"]
-        self.playlist_link_songs = searched_songs
+        # 更新搜索进度
+        self.progress_bar.setValue(int(current_count / total_count * 100))
 
-        # 显示搜索结果
-        self.display_playlist_link_songs_details(searched_songs)
+        # 保存搜索结果到列表中
+        self.playlist_link_songs[index] = song_info
 
-    def display_playlist_link_songs_details(self, songs):
-        """显示歌单歌曲的详细信息"""
-        # 清空表格
-        self.playlist_link_table.clearContents()
-        self.playlist_link_table.setRowCount(len(songs))
+        # 移除行合并
+        self.playlist_link_table.setSpan(index, 1, 1, 1)
 
-        for i, song in enumerate(songs):
-            if not song:  # 如果搜索失败，显示"搜索失败"
-                continue
-
+        if song_info:
             # 复选框
             checkbox = QTableWidgetItem()
             checkbox.setFlags(Qt.ItemFlag.ItemIsUserCheckable |
                               Qt.ItemFlag.ItemIsEnabled)
             checkbox.setCheckState(Qt.CheckState.Unchecked)
-            self.playlist_link_table.setItem(i, 0, checkbox)
+            self.playlist_link_table.setItem(index, 0, checkbox)
 
             # 歌曲信息
             self.playlist_link_table.setItem(
-                i, 1, QTableWidgetItem(song["name"]))
-            self.playlist_link_table.setItem(i, 2, QTableWidgetItem(
-                ", ".join([s["name"] for s in song["singer"]])))
+                index, 1, QTableWidgetItem(song_info["name"]))
+            self.playlist_link_table.setItem(index, 2, QTableWidgetItem(
+                ", ".join([s["name"] for s in song_info["singer"]])))
             self.playlist_link_table.setItem(
-                i, 3, QTableWidgetItem(song["album"]["name"]))
+                index, 3, QTableWidgetItem(song_info["album"]["name"]))
 
             # 时长
-            duration = song.get("interval", 0)
+            duration = song_info.get("interval", 0)
             minutes, seconds = divmod(duration, 60)
             self.playlist_link_table.setItem(
-                i, 4, QTableWidgetItem(f"{minutes:02d}:{seconds:02d}"))
+                index, 4, QTableWidgetItem(f"{minutes:02d}:{seconds:02d}"))
 
             # 下载按钮
             download_btn = QPushButton("下载")
             download_btn.clicked.connect(
-                lambda checked, song_index=i: self.download_playlist_link_song(song_index))
-            self.playlist_link_table.setCellWidget(i, 5, download_btn)
+                lambda checked, song_index=index: self.download_playlist_link_song(song_index))
+            self.playlist_link_table.setCellWidget(index, 5, download_btn)
+        else:
+            # 搜索失败时显示"未找到"
+            self.playlist_link_table.setItem(index, 1, QTableWidgetItem("未找到"))
+
+        # 如果是最后一个搜索结果，启用获取歌单按钮
+        if current_count == total_count:
+            self.get_playlist_btn.setEnabled(True)
 
     def download_playlist_link_song(self, song_index):
         """下载单首歌曲（从歌单链接）- 使用已搜索到的详细信息"""
