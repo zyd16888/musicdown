@@ -246,7 +246,8 @@ class WorkerThread(QThread):
                 songs = self.params["songs"]
                 total = len(songs)
 
-                for i, song_str in enumerate(songs):
+                # 定义单个歌曲搜索的异步函数
+                async def search_single_song(index, song_str):
                     # 解析歌曲字符串：歌曲名 - 歌手名
                     parts = song_str.split(" - ", 1)
                     song_name = parts[0].strip() if len(
@@ -269,19 +270,32 @@ class WorkerThread(QThread):
                     if search_result and search_result.get("songs") and len(search_result["songs"]) > 0:
                         song_info = search_result["songs"][0]
 
-                    # 立即发送单首歌曲搜索结果
+                    # 发送单首歌曲搜索结果
                     self.update_signal.emit({
                         "type": "single_song_search_result",
-                        "index": i,  # 歌曲在列表中的索引
+                        "index": index,  # 歌曲在列表中的索引
                         "song_info": song_info,  # 歌曲信息
                         "total": total,  # 总数
-                        "current": i + 1  # 当前进度
+                        "current": index + 1  # 当前进度（仅用于显示）
                     })
+                    return song_info
 
-                    # 可以添加一个小延迟，避免界面更新过快
-                    await asyncio.sleep(0.05)
+                # 创建所有搜索任务
+                tasks = [search_single_song(i, song_str)
+                         for i, song_str in enumerate(songs)]
 
-                # 搜索全部完成后，可以再发送一个完成信号
+                # 控制并发数量，防止过多并发请求
+                concurrent_limit = 5  # 同时最多5个请求
+                completed = 0
+
+                # 分批并发执行搜索任务
+                while completed < len(tasks):
+                    batch = tasks[completed:completed+concurrent_limit]
+                    await asyncio.gather(*batch)
+                    completed += len(batch)
+                    self.progress_signal.emit(completed, total)
+
+                # 所有搜索完成后发送完成信号
                 self.update_signal.emit({
                     "type": "playlist_link_search_complete",
                     "total": total
@@ -1215,7 +1229,7 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.playlist_link_songs = [None] * \
             len(self.playlist_link_original_songs)
 
-        # 设置所有行为"搜索中..."状态
+        # 设置所有行为"获取详细信息中..."状态
         for i in range(len(self.playlist_link_original_songs)):
             # 在第一个单元格显示搜索状态
             status_item = QTableWidgetItem("获取详细信息中...")
@@ -1250,13 +1264,15 @@ class QQMusicDownloaderGUI(QMainWindow):
         index = data["index"]
         song_info = data["song_info"]
         total_count = data["total"]
-        current_count = data["current"]
-
-        # 更新搜索进度
-        self.progress_bar.setValue(int(current_count / total_count * 100))
 
         # 保存搜索结果到列表中
         self.playlist_link_songs[index] = song_info
+
+        # 由于是并发执行，不再使用current_count作为进度
+        # 而是使用已完成的搜索数量计算进度
+        completed_count = sum(
+            1 for s in self.playlist_link_songs if s is not None)
+        self.progress_bar.setValue(int(completed_count / total_count * 100))
 
         # 移除行合并
         self.playlist_link_table.setSpan(index, 1, 1, 1)
@@ -1292,8 +1308,8 @@ class QQMusicDownloaderGUI(QMainWindow):
             # 搜索失败时显示"未找到"
             self.playlist_link_table.setItem(index, 1, QTableWidgetItem("未找到"))
 
-        # 如果是最后一个搜索结果，启用获取歌单按钮
-        if current_count == total_count:
+        # 如果所有歌曲都已搜索完成，启用获取歌单按钮
+        if completed_count == total_count:
             self.get_playlist_btn.setEnabled(True)
 
     def download_playlist_link_song(self, song_index):
