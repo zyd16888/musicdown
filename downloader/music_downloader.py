@@ -53,6 +53,7 @@ class MusicDownloader:
             temp_filepath = await get_file_path(song_info, song_url, download_dir)
             self.log(f"下载歌曲路径: {temp_filepath}")
             download_success = await self.download_manager.download_with_progress(song_url, temp_filepath)
+            self.log(f"歌曲下载完成")
 
             if not download_success:
                 self.log("下载歌曲失败")
@@ -60,7 +61,8 @@ class MusicDownloader:
 
             # 3. 下载专辑封面
             album_mid = song_info['album']['mid']
-            cover_path = await self.download_manager.download_album_cover(album_mid)
+            cover_path = await self.download_manager.download_album_cover(album_mid, download_dir)
+            self.log(f"封面下载完成")
 
             # 4. 下载歌词
             lyrics = await self.qq_music_api.get_lyrics(song_info['mid'])
