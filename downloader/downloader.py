@@ -40,8 +40,6 @@ class DownloadManager:
                             self._update_progress(
                                 downloaded, total_size, start_time, current_time)
                             last_update_time = current_time
-
-                self.log("文件下载完成！")
                 return True
 
         except Exception as e:
@@ -57,10 +55,10 @@ class DownloadManager:
             self.log(
                 f"下载进度: {progress:.1f}% | 速度: {humanize.naturalsize(speed)}/s")
 
-    async def download_album_cover(self, album_mid: str) -> Path:
+    async def download_album_cover(self, album_mid: str, download_dir: Path) -> Path:
         """下载专辑封面并返回本地文件路径"""
         cover_url = f"https://y.qq.com/music/photo_new/T002R800x800M000{album_mid}.jpg?max_age=2592000"
-        cover_path = config.DOWNLOADS_DIR / f"cover_{album_mid}.jpg"
+        cover_path = download_dir.parent / f"cover_{album_mid}.jpg"
 
         try:
             # 使用下载管理器下载封面

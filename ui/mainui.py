@@ -1,12 +1,12 @@
 import asyncio
+import json
+import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
-import json
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QIcon, QPixmap, QTextCursor
-from PyQt6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGridLayout,
+from PyQt6.QtGui import QIcon, QTextCursor
+from PyQt6.QtWidgets import (QComboBox, QFileDialog, QGridLayout,
                              QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QMainWindow, QMessageBox, QProgressBar, QPushButton,
                              QRadioButton, QTabWidget, QTableWidget,
@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGridLayout,
 from api.qm import QQMusicAPI
 from downloader.music_downloader import MusicDownloader
 from utils.menum import SearchType
-import logging
 
 
 class WorkerThread(QThread):
@@ -362,6 +361,7 @@ class QQMusicDownloaderGUI(QMainWindow):
 
     def setup_logger(self):
         """设置日志处理器，将日志消息发送到UI"""
+
         class UILogHandler(logging.Handler):
             def __init__(self, ui_instance):
                 super().__init__()
@@ -482,6 +482,7 @@ class QQMusicDownloaderGUI(QMainWindow):
         """显示搜索结果"""
         if self.search_type_combo.currentIndex() == 0:  # 单曲
             self.search_results = result["songs"]
+
             self.result_table.setColumnCount(6)
             self.result_table.setHorizontalHeaderLabels(
                 ["", "歌曲名", "歌手", "专辑", "时长", "操作"])
@@ -880,11 +881,12 @@ class QQMusicDownloaderGUI(QMainWindow):
             if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config = json.loads(f.read())
+                    # 只读取需要的配置，不影响其他配置
                     self.download_path = config.get(
                         'download_path', str(Path.home() / "Downloads"))
                     saved_cookie = config.get('cookie', '')
-                    self._saved_quality = config.get(
-                        'quality', '320')  # 加载音质设置
+                    self._saved_quality = config.get('quality', '320')
+
                     if hasattr(self, 'cookie_input'):  # 如果UI已经初始化
                         self.cookie_input.setText(saved_cookie)
                     else:  # 如果UI还没初始化，保存cookie以供后续使用
@@ -895,12 +897,21 @@ class QQMusicDownloaderGUI(QMainWindow):
     def save_config(self):
         """保存配置文件"""
         try:
-            config = {
+            # 首先读取现有配置
+            existing_config = {}
+            if self.config_file.exists():
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    existing_config = json.loads(f.read())
+
+            # 更新需要保存的配置项
+            existing_config.update({
                 'download_path': self.download_path,
                 'cookie': self.cookie_input.text().strip(),
-                'quality': self.get_selected_quality()  # 保存音质设置
-            }
+                'quality': self.get_selected_quality()
+            })
+
+            # 保存完整配置
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+                json.dump(existing_config, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存配置文件失败: {e}")
