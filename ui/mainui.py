@@ -114,6 +114,134 @@ class WorkerThread(QThread):
 
                 self.update_signal.emit({"type": "download_all_complete"})
 
+            elif self.task_type == "get_playlist_from_link":
+                url = self.params["url"]
+                result = await self.api.get_playlist_songs(url)
+                self.update_signal.emit({
+                    "type": "playlist_link_result",
+                    "data": result
+                })
+
+            elif self.task_type == "search_and_download":
+                # 先搜索歌曲
+                query = f"{self.params['song_name']} {self.params['singer_name']}"
+                search_result = await self.api.search(
+                    query,
+                    SearchType.SONG,
+                    1,  # 页码
+                    1    # 限制为1个结果
+                )
+
+                if not search_result or not search_result.get("songs") or len(search_result["songs"]) == 0:
+                    self.update_signal.emit({
+                        "type": "download_complete",
+                        "data": {
+                            "success": False,
+                            "path": None,
+                            "song_name": self.params["song_name"],
+                            "singer": self.params["singer_name"]
+                        }
+                    })
+                    return
+
+                # 下载找到的歌曲
+                song_info = search_result["songs"][0]
+                filetype = self.params["filetype"]
+                download_dir = self.params.get("download_dir")
+                cookie = self.params.get("cookie", "")
+
+                result = await self.downloader.download_song(song_info, download_dir, filetype, cookie)
+
+                self.update_signal.emit({
+                    "type": "download_complete",
+                    "data": {
+                        "success": result is not None,
+                        "path": str(result) if result else None,
+                        "song_name": self.params["song_name"],
+                        "singer": self.params["singer_name"]
+                    }
+                })
+
+            elif self.task_type == "batch_search_and_download":
+                songs = self.params["songs"]
+                filetype = self.params["filetype"]
+                download_dir = self.params.get("download_dir")
+                cookie = self.params.get("cookie", "")
+                total = len(songs)
+
+                for i, song in enumerate(songs):
+                    self.progress_signal.emit(i, total)
+
+                    # 搜索歌曲
+                    query = f"{song['name']} {song['artist']}"
+                    search_result = await self.api.search(
+                        query,
+                        SearchType.SONG,
+                        1,  # 页码
+                        1    # 限制为1个结果
+                    )
+
+                    success = False
+                    path = None
+
+                    if search_result and search_result.get("songs") and len(search_result["songs"]) > 0:
+                        # 下载找到的歌曲
+                        song_info = search_result["songs"][0]
+                        result = await self.downloader.download_song(song_info, download_dir, filetype, cookie)
+                        success = result is not None
+                        path = str(result) if result else None
+
+                    self.update_signal.emit({
+                        "type": "download_progress",
+                        "data": {
+                            "current": i + 1,
+                            "total": total,
+                            "success": success,
+                            "path": path,
+                            "song_name": song["name"],
+                            "singer": song["artist"]
+                        }
+                    })
+
+                self.update_signal.emit({"type": "download_all_complete"})
+
+            elif self.task_type == "search_playlist_link_songs":
+                songs = self.params["songs"]
+                detailed_songs = []
+                total = len(songs)
+
+                for i, song_str in enumerate(songs):
+                    self.progress_signal.emit(i, total)
+
+                    # 解析歌曲字符串：歌曲名 - 歌手名
+                    parts = song_str.split(" - ", 1)
+                    song_name = parts[0].strip() if len(
+                        parts) > 0 else song_str
+                    artist_name = parts[1].strip() if len(parts) > 1 else ""
+
+                    # 构建搜索查询
+                    query = f"{song_name} {artist_name}"
+
+                    # 搜索歌曲
+                    search_result = await self.api.search(
+                        query,
+                        SearchType.SONG,
+                        1,  # 页码
+                        1    # 限制为1个结果
+                    )
+
+                    # 获取第一个匹配结果
+                    song_info = None
+                    if search_result and search_result.get("songs") and len(search_result["songs"]) > 0:
+                        song_info = search_result["songs"][0]
+
+                    detailed_songs.append(song_info)
+
+                self.update_signal.emit({
+                    "type": "playlist_link_songs_details",
+                    "data": detailed_songs
+                })
+
         except Exception as e:
             self.error_signal.emit(str(e))
 
@@ -336,6 +464,63 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.tabs.addTab(self.search_tab, "搜索结果")
         self.tabs.addTab(self.settings_tab, "下载设置")
         self.tabs.addTab(self.download_tab, "下载记录")
+
+        # 添加歌单链接下载选项卡
+        self.playlist_link_tab = QWidget()
+        playlist_link_layout = QVBoxLayout(self.playlist_link_tab)
+
+        # 歌单链接输入区域
+        link_input_layout = QHBoxLayout()
+        link_input_layout.addWidget(QLabel("歌单链接:"))
+        self.playlist_link_input = QLineEdit()
+        self.playlist_link_input.setPlaceholderText("输入QQ音乐歌单链接...")
+        self.playlist_link_input.returnPressed.connect(
+            self.get_playlist_from_link)
+        link_input_layout.addWidget(self.playlist_link_input)
+
+        self.get_playlist_btn = QPushButton("获取歌单")
+        self.get_playlist_btn.clicked.connect(self.get_playlist_from_link)
+        link_input_layout.addWidget(self.get_playlist_btn)
+
+        playlist_link_layout.addLayout(link_input_layout)
+
+        # 歌单信息区域
+        self.playlist_info_label = QLabel("歌单信息: ")
+        playlist_link_layout.addWidget(self.playlist_info_label)
+
+        # 歌单歌曲列表
+        self.playlist_link_table = QTableWidget()
+        self.playlist_link_table.setColumnCount(6)
+        self.playlist_link_table.setHorizontalHeaderLabels(
+            ["", "歌曲名", "歌手", "专辑", "时长", "操作"])
+        self.playlist_link_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        self.playlist_link_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch)
+        self.playlist_link_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers)
+        self.playlist_link_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows)
+
+        playlist_link_layout.addWidget(self.playlist_link_table)
+
+        # 批量下载按钮
+        batch_download_layout = QHBoxLayout()
+        self.select_all_link_btn = QPushButton("全选")
+        self.select_all_link_btn.clicked.connect(
+            self.select_all_playlist_link_songs)
+
+        self.batch_download_link_btn = QPushButton("批量下载选中歌曲")
+        self.batch_download_link_btn.clicked.connect(
+            self.batch_download_from_link)
+
+        batch_download_layout.addWidget(self.select_all_link_btn)
+        batch_download_layout.addWidget(self.batch_download_link_btn)
+        batch_download_layout.addStretch()
+
+        playlist_link_layout.addLayout(batch_download_layout)
+
+        self.tabs.addTab(self.playlist_link_tab, "歌单链接下载")
 
         # 添加新的日志选项卡
         self.log_tab = QWidget()
@@ -915,3 +1100,265 @@ class QQMusicDownloaderGUI(QMainWindow):
                 json.dump(existing_config, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存配置文件失败: {e}")
+
+    async def search_song_for_download(self, song_name, singer_name):
+        """搜索单首歌曲用于下载"""
+        query = f"{song_name} {singer_name}"
+        result = await self.api.search(
+            query,
+            SearchType.SONG,
+            1,  # 页码
+            1    # 限制为1个结果
+        )
+        if result and result.get("songs") and len(result["songs"]) > 0:
+            return result["songs"][0]
+        return None
+
+    def get_playlist_from_link(self):
+        """从链接获取歌单"""
+        link = self.playlist_link_input.text().strip()
+        if not link:
+            QMessageBox.warning(self, "提示", "请输入歌单链接")
+            return
+
+        # 启动线程获取歌单
+        self.current_worker = WorkerThread(
+            "get_playlist_from_link",
+            api=self.api,
+            params={"url": link}
+        )
+        self.current_worker.update_signal.connect(
+            self.handle_playlist_link_result)
+        self.current_worker.error_signal.connect(self.handle_worker_error)
+        self.current_worker.start()
+
+    @pyqtSlot(dict)
+    def handle_playlist_link_result(self, data):
+        """处理歌单链接获取结果"""
+        if data["type"] != "playlist_link_result":
+            return
+
+        playlist_data = data["data"]
+        if playlist_data["code"] != 1:
+            QMessageBox.warning(
+                self, "错误", f"获取歌单失败: {playlist_data.get('error', '未知错误')}")
+            return
+
+        # 更新歌单信息标签
+        playlist_name = playlist_data["data"]["name"]
+        songs_count = playlist_data["data"]["songs_count"]
+        self.playlist_info_label.setText(
+            f"歌单信息: {playlist_name} (共{songs_count}首歌曲)")
+
+        # 保存原始歌曲列表
+        self.playlist_link_original_songs = playlist_data["data"]["songs"]
+
+        # 启动搜索获取详细信息
+        self.search_playlist_songs_details()
+
+    def search_playlist_songs_details(self):
+        """搜索歌单中的歌曲详细信息"""
+        if not hasattr(self, 'playlist_link_original_songs') or not self.playlist_link_original_songs:
+            return
+
+        # 显示加载状态
+        self.playlist_link_table.setRowCount(1)
+        self.playlist_link_table.setItem(
+            0, 1, QTableWidgetItem("正在获取歌曲详细信息..."))
+        self.playlist_link_table.setSpan(0, 1, 1, 4)  # 合并单元格
+
+        # 禁用获取歌单按钮
+        self.get_playlist_btn.setEnabled(False)
+
+        # 启动批量搜索线程
+        self.current_worker = WorkerThread(
+            "search_playlist_link_songs",
+            api=self.api,
+            params={
+                "songs": self.playlist_link_original_songs
+            }
+        )
+        self.current_worker.update_signal.connect(
+            self.handle_searched_playlist_songs)
+        self.current_worker.error_signal.connect(self.handle_worker_error)
+        self.current_worker.progress_signal.connect(
+            self.handle_progress_update)
+        self.current_worker.start()
+
+    @pyqtSlot(dict)
+    def handle_searched_playlist_songs(self, data):
+        """处理搜索到的歌单歌曲详细信息"""
+        if data["type"] != "playlist_link_songs_details":
+            return
+
+        # 恢复获取歌单按钮
+        self.get_playlist_btn.setEnabled(True)
+
+        # 获取搜索结果
+        searched_songs = data["data"]
+        self.playlist_link_songs = searched_songs
+
+        # 显示搜索结果
+        self.display_playlist_link_songs_details(searched_songs)
+
+    def display_playlist_link_songs_details(self, songs):
+        """显示歌单歌曲的详细信息"""
+        # 清空表格
+        self.playlist_link_table.clearContents()
+        self.playlist_link_table.setRowCount(len(songs))
+
+        for i, song in enumerate(songs):
+            if not song:  # 如果搜索失败，显示"搜索失败"
+                continue
+
+            # 复选框
+            checkbox = QTableWidgetItem()
+            checkbox.setFlags(Qt.ItemFlag.ItemIsUserCheckable |
+                              Qt.ItemFlag.ItemIsEnabled)
+            checkbox.setCheckState(Qt.CheckState.Unchecked)
+            self.playlist_link_table.setItem(i, 0, checkbox)
+
+            # 歌曲信息
+            self.playlist_link_table.setItem(
+                i, 1, QTableWidgetItem(song["name"]))
+            self.playlist_link_table.setItem(i, 2, QTableWidgetItem(
+                ", ".join([s["name"] for s in song["singer"]])))
+            self.playlist_link_table.setItem(
+                i, 3, QTableWidgetItem(song["album"]["name"]))
+
+            # 时长
+            duration = song.get("interval", 0)
+            minutes, seconds = divmod(duration, 60)
+            self.playlist_link_table.setItem(
+                i, 4, QTableWidgetItem(f"{minutes:02d}:{seconds:02d}"))
+
+            # 下载按钮
+            download_btn = QPushButton("下载")
+            download_btn.clicked.connect(
+                lambda checked, song_index=i: self.download_playlist_link_song(song_index))
+            self.playlist_link_table.setCellWidget(i, 5, download_btn)
+
+    def download_playlist_link_song(self, song_index):
+        """下载单首歌曲（从歌单链接）- 使用已搜索到的详细信息"""
+        if not hasattr(self, 'playlist_link_songs') or song_index >= len(self.playlist_link_songs):
+            return
+
+        song_info = self.playlist_link_songs[song_index]
+        if not song_info:
+            QMessageBox.warning(self, "提示", "无法下载，搜索失败")
+            return
+
+        filetype = self.get_selected_quality()
+        cookie = self.cookie_input.text().strip() or None
+        download_dir = Path(self.download_path)
+
+        # 切换到下载记录标签页
+        self.tabs.setCurrentIndex(2)
+
+        # 添加下载记录
+        row = self.download_table.rowCount()
+        self.download_table.setRowCount(row + 1)
+
+        self.download_table.setItem(
+            row, 0, QTableWidgetItem(song_info["name"]))
+        self.download_table.setItem(row, 1, QTableWidgetItem(
+            ", ".join([s["name"] for s in song_info["singer"]])))
+        self.download_table.setItem(row, 2, QTableWidgetItem("正在下载..."))
+        self.download_table.setItem(row, 3, QTableWidgetItem(""))
+
+        # 启动下载线程
+        self.current_worker = WorkerThread(
+            "download_song",
+            downloader=self.downloader,
+            params={
+                "song_info": song_info,
+                "filetype": filetype,
+                "download_dir": download_dir,
+                "cookie": cookie
+            }
+        )
+        self.current_worker.update_signal.connect(self.handle_worker_update)
+        self.current_worker.error_signal.connect(self.handle_worker_error)
+        self.current_worker.start()
+
+    def batch_download_from_link(self):
+        """批量下载选中的歌曲（从歌单链接）"""
+        if not hasattr(self, 'playlist_link_songs'):
+            QMessageBox.warning(self, "提示", "请先获取歌单")
+            return
+
+        selected_songs = []
+        for row in range(self.playlist_link_table.rowCount()):
+            item = self.playlist_link_table.item(row, 0)
+            if item and item.checkState() == Qt.CheckState.Checked:
+                song_info = self.playlist_link_songs[row]
+                if song_info:  # 确保搜索成功
+                    selected_songs.append(song_info)
+
+        if not selected_songs:
+            QMessageBox.warning(self, "提示", "请选择要下载的歌曲")
+            return
+
+        # 切换到下载记录标签页
+        self.tabs.setCurrentIndex(2)
+
+        # 重置进度条
+        self.progress_bar.setValue(0)
+
+        # 添加下载记录
+        start_row = self.download_table.rowCount()
+        self.download_table.setRowCount(start_row + len(selected_songs))
+
+        for i, song in enumerate(selected_songs):
+            row = start_row + i
+            self.download_table.setItem(row, 0, QTableWidgetItem(song["name"]))
+            self.download_table.setItem(row, 1, QTableWidgetItem(
+                ", ".join([s["name"] for s in song["singer"]])))
+            self.download_table.setItem(row, 2, QTableWidgetItem("等待下载..."))
+            self.download_table.setItem(row, 3, QTableWidgetItem(""))
+
+        # 启动批量下载线程
+        filetype = self.get_selected_quality()
+        cookie = self.cookie_input.text().strip() or None
+        download_dir = Path(self.download_path)
+
+        self.current_worker = WorkerThread(
+            "download_multiple",
+            downloader=self.downloader,
+            params={
+                "songs": selected_songs,
+                "filetype": filetype,
+                "download_dir": download_dir,
+                "cookie": cookie
+            }
+        )
+        self.current_worker.update_signal.connect(self.handle_worker_update)
+        self.current_worker.error_signal.connect(self.handle_worker_error)
+        self.current_worker.progress_signal.connect(
+            self.handle_progress_update)
+        self.current_worker.start()
+
+    def select_all_playlist_link_songs(self):
+        """全选/取消全选歌单链接中的歌曲"""
+        if self.playlist_link_table.rowCount() == 0:
+            return
+
+        # 检查当前是否已经全选
+        all_checked = True
+        for row in range(self.playlist_link_table.rowCount()):
+            item = self.playlist_link_table.item(row, 0)
+            if item and item.checkState() != Qt.CheckState.Checked:
+                all_checked = False
+                break
+
+        # 设置新的状态
+        new_state = Qt.CheckState.Unchecked if all_checked else Qt.CheckState.Checked
+
+        # 更新所有复选框状态
+        for row in range(self.playlist_link_table.rowCount()):
+            item = self.playlist_link_table.item(row, 0)
+            if item:
+                item.setCheckState(new_state)
+
+        # 刷新表格视图
+        self.playlist_link_table.update()
