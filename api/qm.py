@@ -319,3 +319,49 @@ class QQMusicAPI:
         url = f"https://y.qq.com/music/photo_new/T002R800x800M000{album_mid}.jpg?max_age=2592000"
 
         return self._make_request(url, RequestMethod.GET)
+
+    async def get_playlist_songs(self, url: str) -> Dict:
+        """从URL获取歌单列表
+        
+        Args:
+            url (str): 歌单URL
+            
+        Returns:
+            Dict: 包含歌单信息的字典
+        """
+        try:
+            api_url = "https://sss.unmeta.cn/songlist"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://music.unmeta.cn/",
+            }
+
+            # 使用 files 参数来发送 form-data
+            files = {
+                "url": (None, url)
+            }
+
+            response = await self.client.post(
+                api_url,
+                files=files,
+                headers=headers
+            )
+            response_data = response.json()
+
+            if not response_data:
+                return {'code': -1, 'error': 'API请求失败'}
+
+            if response_data.get("code") != 1:
+                return {'code': -1, 'error': f"获取歌单失败: {response_data.get('msg')}"}
+
+            return {
+                'code': 1,
+                'data': {
+                    'name': response_data['data']['name'],
+                    'songs': response_data["data"]["songs"],
+                    'songs_count': response_data['data']['songs_count']
+                }
+            }
+
+        except Exception as e:
+            return {'code': -1, 'error': str(e)}
