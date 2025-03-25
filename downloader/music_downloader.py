@@ -44,7 +44,8 @@ class MusicDownloader:
             # 1. 获取歌曲URL
             song_url_result = await self.qq_music_api.get_song_url(song_info['mid'], filetype=filetype, cookie=cookie)
             if song_url_result['code'] == -1 or not song_url_result.get('url'):
-                self.log("无法获取歌曲下载链接，可能是版权限制")
+                self.log("无法获取歌曲下载链接，可能是版权限制（cookie过期）或当前音质不支持")
+                self.log(f"song_url_result: {song_url_result}")
                 return None
 
             # 2. 下载歌曲

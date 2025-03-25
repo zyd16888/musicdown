@@ -992,28 +992,33 @@ class QQMusicDownloaderGUI(QMainWindow):
         # 刷新表格视图
         self.result_table.update()
 
-    def batch_download(self):
-        """批量下载选中的歌曲"""
+    def batch_download(self, songs=None):
+        """批量下载选中的歌曲或指定的歌曲列表"""
         selected_songs = []
         # 只有当用户输入了cookie时才使用用户的cookie
         cookie = self.cookie_input.text().strip() or None
 
         # 获取表格中当前显示的歌曲
-        current_songs = []
-        search_type = self.search_type_combo.currentIndex()
+        if songs:
+            # 如果提供了歌曲列表，直接使用
+            selected_songs = songs
+        else:
+            # 否则，按原来的逻辑查找选中的歌曲
+            current_songs = []
+            search_type = self.search_type_combo.currentIndex()
 
-        if search_type == 0:  # 单曲搜索
-            current_songs = self.search_results
-        elif search_type == 1 and self.album_songs:  # 专辑歌曲
-            current_songs = self.album_songs
-        elif search_type == 2 and self.playlist_songs:  # 歌单歌曲
-            current_songs = self.playlist_songs
+            if search_type == 0:  # 单曲搜索
+                current_songs = self.search_results
+            elif search_type == 1 and self.album_songs:  # 专辑歌曲
+                current_songs = self.album_songs
+            elif search_type == 2 and self.playlist_songs:  # 歌单歌曲
+                current_songs = self.playlist_songs
 
-        # 收集选中的歌曲
-        for row in range(self.result_table.rowCount()):
-            item = self.result_table.item(row, 0)
-            if item and item.checkState() == Qt.CheckState.Checked and row < len(current_songs):
-                selected_songs.append(current_songs[row])
+            # 收集选中的歌曲
+            for row in range(self.result_table.rowCount()):
+                item = self.result_table.item(row, 0)
+                if item and item.checkState() == Qt.CheckState.Checked and row < len(current_songs):
+                    selected_songs.append(current_songs[row])
 
         if not selected_songs:
             QMessageBox.warning(self, "提示", "请选择要下载的歌曲")
