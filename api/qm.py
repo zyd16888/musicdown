@@ -238,7 +238,6 @@ class QQMusicAPI:
 
         Args:
             songmid (str): 歌曲MID
-            filename (str): 文件名
             filetype (str): 文件类型 ('m4a'/'128'/'320'/'flac')
             cookie (str): Cookie
 
