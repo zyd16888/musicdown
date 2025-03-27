@@ -1,0 +1,104 @@
+name: build musicdown
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "**.py"
+      - "requirements.txt"
+      - ".github/workflows/build.yaml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        arch: [x64]
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          architecture: ${{ matrix.arch }}
+
+      - name: Get arch
+        id: arch
+        shell: bash
+        run: |
+          if [[ ${{ matrix.arch }} == 'x64' ]]; then
+            echo "arch=amd64" >> $GITHUB_OUTPUT
+            echo "nuitka_arch=x86_64" >> $GITHUB_OUTPUT
+          elif [[ ${{ matrix.arch }} == 'arm64' ]]; then
+            echo "arch=arm64" >> $GITHUB_OUTPUT
+            echo "nuitka_arch=arm64" >> $GITHUB_OUTPUT
+          elif [[ ${{ matrix.arch }} == 'win32' ]]; then
+            echo "arch=x86" >> $GITHUB_OUTPUT
+            echo "nuitka_arch=universal" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Install dependencies
+        run: |
+          pip install -U -r requirements.txt
+      
+      - name: Install upx/7zip
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          choco install upx 7zip -y
+
+      - name: mkdir
+        run: |
+          mkdir -p dist
+          mkdir -p upload
+      
+      - name: Get Information
+        id: info
+        shell: bash
+        run: |
+          echo "copyright=Copyright (C) $(date +%Y) musicdown" >> $GITHUB_OUTPUT
+          echo "version=$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+
+      - name: Build Executable(Windows)
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          nuitka-version: main
+          script-name: main.py
+          
+          mode: standalone
+          enable-plugins: pyqt6
+          product-name: "musicdown"
+          file-version: ${{ steps.info.outputs.version }}
+          product-version: ${{ steps.info.outputs.version }}
+          copyright: ${{ steps.info.outputs.copyright }}
+          
+          windows-icon-from-ico: "ui/icon.ico"
+          mingw64: true
+          windows-disable-console: true
+          
+          include-package: utils
+          include-package: ui
+          include-package: api
+          include-package: decryptor
+          include-package: downloader
+
+      - name: Compress exe
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          Rename-Item -Path "build/main.dist" -NewName "musicdown"
+          cd build
+          7z a -tzip -mx=9 ../upload/musicdown-${{ steps.info.outputs.version }}-windows-${{ steps.arch.outputs.arch }}.zip musicdown
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ runner.os }} - ${{ matrix.arch }} artifacts
+          path: |
+            upload/
