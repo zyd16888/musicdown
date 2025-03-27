@@ -83,11 +83,7 @@ jobs:
           mingw64: true
           windows-disable-console: true
           
-          include-package: utils
-          include-package: ui
-          include-package: api
-          include-package: decryptor
-          include-package: downloader
+          include-package: utils,ui,api,decryptor,downloader
 
       - name: Compress exe
         if: ${{ runner.os == 'Windows' }}
