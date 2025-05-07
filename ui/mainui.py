@@ -470,26 +470,43 @@ class QQMusicDownloaderGUI(QMainWindow):
         self.quality_128 = QRadioButton("MP3 128kbps")
         self.quality_320 = QRadioButton("MP3 320kbps")
         self.quality_flac = QRadioButton("FLAC")
+        self.quality_ATMOS_51 = QRadioButton("臻品音质2.0")
+        self.quality_ATMOS_2 = QRadioButton("臻品全景声2.0")
+        self.quality_MASTER = QRadioButton("臻品母带2.0")
 
         # 根据保存的设置选择音质
         quality_map = {
             "m4a": self.quality_m4a,
             "128": self.quality_128,
             "320": self.quality_320,
-            "flac": self.quality_flac
+            "flac": self.quality_flac,
+            "ATMOS_51": self.quality_ATMOS_51,
+            "ATMOS_2": self.quality_ATMOS_2,
+            "MASTER": self.quality_MASTER,
         }
         selected_quality = quality_map.get(
             self._saved_quality, self.quality_320)
         selected_quality.setChecked(True)
 
         # 添加音质变化的事件处理
-        for radio in [self.quality_m4a, self.quality_128, self.quality_320, self.quality_flac]:
+        for radio in [
+            self.quality_m4a,
+            self.quality_128,
+            self.quality_320,
+            self.quality_flac,
+            self.quality_ATMOS_51,
+            self.quality_ATMOS_2,
+            self.quality_MASTER,
+        ]:
             radio.toggled.connect(self.save_config)
 
         quality_layout.addWidget(self.quality_m4a)
         quality_layout.addWidget(self.quality_128)
         quality_layout.addWidget(self.quality_320)
         quality_layout.addWidget(self.quality_flac)
+        quality_layout.addWidget(self.quality_ATMOS_51)
+        quality_layout.addWidget(self.quality_ATMOS_2)
+        quality_layout.addWidget(self.quality_MASTER)
         quality_layout.addStretch()
 
         settings_layout.addLayout(quality_layout, 1, 1, 1, 2)
@@ -649,6 +666,12 @@ class QQMusicDownloaderGUI(QMainWindow):
             return "320"
         elif self.quality_flac.isChecked():
             return "flac"
+        elif self.quality_ATMOS_51.isChecked():
+            return "ATMOS_51"
+        elif self.quality_ATMOS_2.isChecked():
+            return "ATMOS_2"
+        elif self.quality_MASTER.isChecked():
+            return "MASTER"
         return "320"  # 默认
 
     @pyqtSlot()
