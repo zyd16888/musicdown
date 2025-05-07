@@ -24,10 +24,43 @@ class QQMusicAPI:
         self.lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
 
         self.file_config = {
-            'm4a': {'s': 'C400', 'e': '.m4a', 'bitrate': 'M4A'},
-            '128': {'s': 'M500', 'e': '.mp3', 'bitrate': '128kbps'},
-            '320': {'s': 'M800', 'e': '.mp3', 'bitrate': '320kbps'},
-            'flac': {'s': 'F000', 'e': '.flac', 'bitrate': 'FLAC'},
+            "m4a": {"s": "C400", "e": ".m4a", "bitrate": "96kbps", "name": "M4A"},
+            "128": {
+                "s": "M500",
+                "e": ".mp3",
+                "bitrate": "128kbps",
+                "name": "MP3 128kbps",
+            },
+            "320": {
+                "s": "M800",
+                "e": ".mp3",
+                "bitrate": "320kbps",
+                "name": "MP3 320kbps",
+            },
+            "flac": {
+                "s": "F000",
+                "e": ".flac",
+                "bitrate": "16Bit 44.1kHz~24Bit 48kHz",
+                "name": "SQ无损",
+            },
+            "ATMOS_51": {
+                "s": "Q001",
+                "e": ".flac",
+                "bitrate": "16Bit 44.1kHz",
+                "name": "臻品音质2.0",
+            },
+            "ATMOS_2": {
+                "s": "Q000",
+                "e": ".flac",
+                "bitrate": "16Bit 44.1kHz",
+                "name": "臻品全景声2.0",
+            },
+            "MASTER": {
+                "s": "AI00",
+                "e": ".flac",
+                "bitrate": "24Bit 192kHz",
+                "name": "臻品母带2.0",
+            },
         }
 
         self.uin = str(random.randint(1000000000, 9999999999))

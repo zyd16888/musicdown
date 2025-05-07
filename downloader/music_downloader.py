@@ -31,7 +31,7 @@ class MusicDownloader:
         Args:
             song_info: 歌曲信息字典
             download_dir: 下载目录
-            filetype: 文件类型 ('m4a'/'128'/'320'/'flac')
+            filetype: 文件类型 ('m4a'/'128'/'320'/'flac/ATMOS_51/ATMOS_2/MASTER')
             cookie: QQ音乐Cookie
 
         Returns:
