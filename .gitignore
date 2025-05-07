@@ -1,0 +1,17 @@
+__pycache__
+.idea
+logs/
+json/
+bot/
+decrypt.py
+downloads/
+build/
+dist/
+lrc_output/
+*.spec
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.session*
