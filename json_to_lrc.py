@@ -1,7 +1,7 @@
-import json
-import re
 import os
-from collections import defaultdict
+import re
+
+import json
 
 
 def ms_to_timestamp(ms):
@@ -152,7 +152,7 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
 
                     # 使用下一行的开始时间作为当前行的结束时间，如果是最后一行，使用一个较大的值
                     if i < len(roma_matches) - 1:
-                        end_ms = timestamp_to_ms(roma_matches[i+1][0])
+                        end_ms = timestamp_to_ms(roma_matches[i + 1][0])
                     else:
                         # 假设最后一行的持续时间为5秒
                         end_ms = start_ms + 5000
@@ -178,7 +178,7 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
 
                 # 使用下一行的开始时间作为当前行的结束时间，如果是最后一行，使用一个较大的值
                 if i < len(trans_matches) - 1:
-                    end_ms = timestamp_to_ms(trans_matches[i+1][0])
+                    end_ms = timestamp_to_ms(trans_matches[i + 1][0])
                 else:
                     # 假设最后一行的持续时间为5秒
                     end_ms = start_ms + 5000
@@ -260,6 +260,8 @@ def parse_json_to_lrc(json_file, output_dir="lrc_output"):
 def main():
     json_files = "json\lyrics_parser_word_by_word_older.json"
     print(f"处理文件: {json_files}")
+
+
     parse_json_to_lrc(json_files)
 
 
