@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QObject
 from PyQt6.QtGui import QIcon, QTextCursor
 from PyQt6.QtWidgets import (QComboBox, QFileDialog, QGridLayout,
                              QHBoxLayout, QHeaderView, QLabel, QLineEdit,
@@ -623,14 +623,23 @@ class QQMusicDownloaderGUI(QMainWindow):
     def setup_logger(self):
         """设置日志处理器，将日志消息发送到UI"""
 
-        class UILogHandler(logging.Handler):
+        class UILogHandler(QObject, logging.Handler):
+            # 在类级别定义信号
+            log_signal = pyqtSignal(str)
+
             def __init__(self, ui_instance):
-                super().__init__()
+                QObject.__init__(self)
+                logging.Handler.__init__(self)
                 self.ui = ui_instance
+                # 连接信号到更新函数
+                self.log_signal.connect(
+                    self.ui.update_log, Qt.ConnectionType.QueuedConnection
+                )
 
             def emit(self, record):
                 msg = self.format(record)
-                self.ui.update_log(msg)
+                # 使用信号发送日志消息
+                self.log_signal.emit(msg)
 
         # 创建并添加UI日志处理器
         ui_handler = UILogHandler(self)

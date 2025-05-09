@@ -37,44 +37,59 @@ class MusicDownloader:
         Returns:
             处理完成的文件路径，失败则返回None
         """
-        self.log(
-            f"开始下载歌曲: {song_info['name']} - {format_singers(song_info['singer'])}")
+        song_name = song_info["name"]
+        singers = format_singers(song_info["singer"])
+        self.log(f"开始下载歌曲: {song_name} - {singers}")
 
         try:
             # 1. 获取歌曲URL
+            self.log("正在获取下载链接...")
             song_url_result = await self.qq_music_api.get_song_url(song_info['mid'], filetype=filetype, cookie=cookie)
             if song_url_result['code'] == -1 or not song_url_result.get('url'):
-                self.log("无法获取歌曲下载链接，可能是版权限制（cookie过期）或当前音质不支持")
-                self.log(f"song_url_result: {song_url_result}")
+                error_msg = "无法获取歌曲下载链接，可能原因："
+                if not cookie:
+                    error_msg += "\n- 未提供QQ音乐Cookie（部分歌曲需要登录）"
+                if filetype in ["320", "flac", "ATMOS_51", "ATMOS_2", "MASTER"]:
+                    error_msg += f"\n- 当前音质（{filetype}）可能需要VIP权限"
+                error_msg += "\n- 歌曲可能有版权限制"
+                self.log(error_msg)
                 return None
 
             # 2. 下载歌曲
-            song_url = song_url_result['url']
-            self.log(f"download_dir: {download_dir}")
+            song_url = song_url_result["url"]
             temp_filepath = await get_file_path(song_info, song_url, download_dir)
-            self.log(f"下载歌曲路径: {temp_filepath}")
-            download_success = await self.download_manager.download_with_progress(song_url, temp_filepath)
-            self.log(f"歌曲下载完成")
+            self.log(f"准备下载歌曲到: {temp_filepath.name}")
 
+            download_success = await self.download_manager.download_with_progress(
+                song_url, temp_filepath
+            )
             if not download_success:
-                self.log("下载歌曲失败")
+                self.log("下载歌曲失败，请检查网络连接或重试")
                 return None
+            self.log("歌曲文件下载完成")
 
             # 3. 下载专辑封面
+            self.log("正在获取专辑封面...")
             album_mid = song_info['album']['mid']
             cover_path = await self.download_manager.download_album_cover(album_mid, download_dir)
-            self.log(f"封面下载完成")
+            if cover_path:
+                self.log("专辑封面下载完成")
+            else:
+                self.log("警告: 未能下载专辑封面，将继续处理音频文件")
 
             # 4. 下载歌词
-            lyrics = await self.qq_music_api.get_lyrics(song_info['mid'])
+            self.log("正在获取歌词...")
+            try:
+                lyrics = await self.qq_music_api.get_lyrics(song_info["mid"])
+                lrc_lyrics = parse_lrc_lyrics(lyrics)
+                if not lrc_lyrics:
+                    self.log("警告: 未找到歌词或歌词格式不正确")
+            except Exception as e:
+                self.log(f"获取歌词时出错: {str(e)}")
+                lrc_lyrics = ""
 
-            lrc_lyrics = parse_lrc_lyrics(lyrics)
-
-            # 4.1 下载逐字歌词（暂时放弃，没有播放器支持）
-            # lyrics_wbw = await self.qq_music_api.get_word_by_word_lyrics(song_info['mid'])
-
-            # 5. 只添加封面和歌词到音频文件
-            self.log("添加封面和歌词到音频文件...")
+            # 5. 添加封面和歌词到音频文件
+            self.log("正在处理音频文件元数据...")
             processed_filepath = await self._add_cover_and_lyrics(
                 temp_filepath,
                 cover_path,
@@ -82,16 +97,48 @@ class MusicDownloader:
             )
 
             # 6. 清理临时文件
-            if temp_filepath != processed_filepath and temp_filepath.exists():
-                os.remove(temp_filepath)
-            if cover_path and cover_path.exists():
-                os.remove(cover_path)
+            try:
+                if temp_filepath != processed_filepath and temp_filepath.exists():
+                    self.log("清理临时音频文件...")
+                    os.remove(temp_filepath)
+                if cover_path and cover_path.exists():
+                    self.log("清理临时封面文件...")
+                    os.remove(cover_path)
+            except Exception as e:
+                self.log(f"清理临时文件时出现警告: {str(e)}")
+                # 继续执行，因为临时文件清理失败不影响主要功能
 
-            self.log(f"歌曲处理完成: {processed_filepath.name}")
+            # 7. 完成处理
+            quality_str = {
+                "m4a": "标准品质",
+                "128": "标准品质",
+                "320": "高品质",
+                "flac": "无损品质",
+                "ATMOS_51": "臻品音质2.0",
+                "ATMOS_2": "臻品全景声2.0",
+                "MASTER": "臻品母带2.0",
+            }.get(filetype, filetype)
+
+            file_size = processed_filepath.stat().st_size
+            size_str = f"{file_size / 1024 / 1024:.1f}MB"
+
+            self.log(
+                f"下载完成: {processed_filepath.name}\n"
+                f"音质: {quality_str}\n"
+                f"大小: {size_str}"
+            )
             return processed_filepath
 
         except Exception as e:
             self.log(f"处理歌曲时出错: {str(e)}")
+            # 确保出错时也清理临时文件
+            try:
+                if "temp_filepath" in locals() and temp_filepath.exists():
+                    os.remove(temp_filepath)
+                if "cover_path" in locals() and cover_path and cover_path.exists():
+                    os.remove(cover_path)
+            except Exception:
+                pass  # 清理失败不影响错误处理
             return None
 
     async def _add_cover_and_lyrics(self, filepath: Path,
