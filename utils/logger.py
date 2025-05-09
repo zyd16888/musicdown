@@ -80,20 +80,22 @@ class Logger:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_method = getattr(self, level.lower(), self.info)
 
-        if "进度:" in message:
-            # 使用 \r 来覆盖当前行显示进度
-            print(f"\r[{timestamp}] [{level}] {message}", end='', flush=True)
-            self.last_progress = message
-        else:
-            # 如果上一条是进度消息，先打印换行
-            if self.last_progress:
-                print()
-                self.last_progress = None
-            # 其他消息正常打印并换行
-            print(f"[{timestamp}] [{level}] {message}")
-
-        # 使用对应级别的日志方法记录
+        # 使用对应级别的日志方法记录到文件和UI
         log_method(message)
+
+        # 只在控制台环境下处理进度显示
+        if not self.ui_handlers:  # 如果没有UI处理器，说明是控制台环境
+            if "进度:" in message:
+                # 使用 \r 来覆盖当前行显示进度
+                print(f"\r[{timestamp}] [{level}] {message}", end='', flush=True)
+                self.last_progress = message
+            else:
+                # 如果上一条是进度消息，先打印换行
+                if self.last_progress:
+                    print()
+                    self.last_progress = None
+                # 其他消息正常打印并换行
+                print(f"[{timestamp}] [{level}] {message}")
 
     def add_handler(self, handler):
         """添加新的日志处理器"""

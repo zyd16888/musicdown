@@ -15,7 +15,6 @@ class DownloadManager:
     def __init__(self):
         self.log = logger.log_progress
 
-
     async def download_with_progress(self, url: str, filepath: Path) -> bool:
         """带进度和速度显示的下载函数"""
         try:
@@ -47,13 +46,27 @@ class DownloadManager:
             return False
 
     def _update_progress(self, downloaded: int, total_size: int, start_time: float, current_time: float):
-        """更新下载进度"""
+        """更新下载进度
+
+        Args:
+            downloaded: 已下载的字节数
+            total_size: 文件总大小（字节）
+            start_time: 下载开始时间
+            current_time: 当前时间
+        """
         duration = current_time - start_time
         if duration > 0:
             speed = downloaded / duration
             progress = (downloaded / total_size * 100) if total_size else 0
-            self.log(
-                f"下载进度: {progress:.1f}% | 速度: {humanize.naturalsize(speed)}/s")
+
+            # 格式化进度信息
+            progress_msg = (
+                f"下载进度: {progress:.1f}% "
+                f"({humanize.naturalsize(downloaded)}/{humanize.naturalsize(total_size)}) "
+                f"| 速度: {humanize.naturalsize(speed)}/s"
+            )
+
+            self.log(progress_msg)
 
     async def download_album_cover(self, album_mid: str, download_dir: Path) -> Path:
         """下载专辑封面并返回本地文件路径"""
