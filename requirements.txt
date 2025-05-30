@@ -1,6 +1,5 @@
 # Telegram Bot API
-pyrogram>=2.0.0
-tgcrypto  # Pyrogram的推荐依赖
+python-telegram-bot>=20.7
 
 # 音频处理
 mutagen>=1.45.0  # 音频元数据处理
