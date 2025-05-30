@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import traceback
+import json
 from pathlib import Path
 
 # 确保可以导入项目根目录的模块
@@ -49,12 +50,27 @@ async def handle_song_selection(update: Update, context: ContextTypes.DEFAULT_TY
         # 创建临时目录用于下载
         temp_dir = Path(tempfile.mkdtemp(prefix="qqmusic_"))
 
+        # 重新加载配置，确保使用最新的设置
+        try:
+            # 使用Config类的reload_config方法重新加载配置
+            config.reload_config()
+
+            # 获取最新的音质设置和Cookie
+            filetype = config.DEFAULT_QUALITY
+            cookie = config.QQMUSIC_COOKIE
+        except Exception as e:
+            print(f"重新加载配置失败: {str(e)}")
+            # 如果重新加载失败，使用当前内存中的配置
+            filetype = config.DEFAULT_QUALITY
+            cookie = config.QQMUSIC_COOKIE
+
         # 使用 MusicDownloader 下载并处理歌曲
         try:
             filepath = await music_downloader.download_song(
                 song_info=selected_song,
                 download_dir=temp_dir,
-                filetype='flac'
+                filetype=filetype,
+                cookie=cookie
             )
 
             if not filepath:
@@ -95,7 +111,7 @@ async def handle_song_selection(update: Update, context: ContextTypes.DEFAULT_TY
         # 准备发送的音频信息
         caption = f"🎵 {selected_song['name']}\n👤 {format_singers(selected_song['singer'])}\n💿 {selected_song['album']['name']}"
 
-        await callback_query.message.edit_text(f"正在发送音频文件： 💿 {selected_song['album']['name']}")
+        await callback_query.message.edit_text(f"正在发送音频文件： 🎵 {selected_song['name']} - {format_singers(selected_song['singer'])} 💿{selected_song['album']['name']}")
 
         # 发送歌曲文件
         try:

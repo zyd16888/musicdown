@@ -26,6 +26,11 @@ class ConfigManager:
             self.config = {}
             self.save_config()
 
+    def reload_config(self):
+        """重新加载配置文件"""
+        self.load_config()
+        return self.config
+
     def save_config(self):
         with open(self.config_file, "w", encoding='utf-8') as f:
             json.dump(self.config, f, indent=4, ensure_ascii=False)
@@ -55,21 +60,28 @@ class ConfigManager:
 class Config:
     config_file = ConfigManager.get_instance("config.json")
     DOWNLOADS_DIR: Path = field(default=Path('downloads'))
-    DEFAULT_QUALITY: int = 11
+    DEFAULT_QUALITY: str = field(init=False)
     BLOCK_SIZE: int = 8192
     PROGRESS_UPDATE_INTERVAL: float = 0.5
     QQMUSIC_COOKIE: str = field(init=False)
-    API_ID: str = field(init=False)
-    API_HASH: str = field(init=False)
     BOT_TOKEN: str = field(init=False)
+    API_BASE_URL: str = field(init=False)
     # 用户会话状态存储
     user_sessions = {}
 
     def __post_init__(self):
+        self.reload_config()
+
+    def reload_config(self):
+        """重新加载配置"""
+        self.config_file.reload_config()
         self.QQMUSIC_COOKIE = self.config_file.get("qqmusic.cookie", "")
-        self.API_ID = self.config_file.get("tgbot.appId", "")
-        self.API_HASH = self.config_file.get("tgbot.apiHash", "")
         self.BOT_TOKEN = self.config_file.get("tgbot.botToken", "")
+        # 设置自定义API地址，如果没有则使用默认
+        self.API_BASE_URL = self.config_file.get(
+            "tgbot.apiBaseUrl", "https://tgbot.790366.xyz/bot")
+        # 设置默认音质
+        self.DEFAULT_QUALITY = self.config_file.get("quality", "flac")
 
 
 config = Config()
