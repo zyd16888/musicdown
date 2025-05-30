@@ -1,6 +1,6 @@
 from typing import Dict, List, Tuple
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from utils.formatters import format_singers, format_interval
 
