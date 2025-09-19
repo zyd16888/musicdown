@@ -34,6 +34,7 @@ class Window(MSFluentWindow):
         self.search_page = 1
         self.current_search_query = ""
         self.current_search_type = "单曲"
+        self.loading_bar = None
 
         # API Adapter
         self.adapter = MusicAdapter()
@@ -58,12 +59,11 @@ class Window(MSFluentWindow):
         self.addSubInterface(self.settingInterface, FIF.SETTING, '设置', position=NavigationItemPosition.BOTTOM)
 
     def initWindow(self):
-        self.resize(960, 780)
+        self.resize(960, 580)
         self.setWindowIcon(QIcon("D:/project/python/musicdown/ui/icon.ico"))
         self.setWindowTitle('Music Downloader')
 
     def connect_signals(self):
-        """Connect signals and slots for all interfaces."""
         self.searchInterface.search_button.clicked.connect(lambda: self.start_search(is_new_search=True))
         self.searchInterface.search_input.returnPressed.connect(lambda: self.start_search(is_new_search=True))
         self.searchInterface.prev_page_button.clicked.connect(self.go_to_previous_page)
@@ -89,11 +89,12 @@ class Window(MSFluentWindow):
 
         self.searchInterface.search_button.setEnabled(False)
         self.searchInterface.search_button.setText("搜索中...")
+        self.searchInterface.result_table.clearContents()
         self.searchInterface.result_table.setRowCount(0)
         self.searchInterface.show_bottom_controls(False)
 
         limit = self.searchInterface.limit_spinbox.value()
-        
+
         if self.current_search_type == "单曲":
             coro = self.adapter.search_song(keyword=self.current_search_query, limit=limit, page=self.search_page)
             self.run_async_task(coro, self.on_song_search_finished)
@@ -109,23 +110,10 @@ class Window(MSFluentWindow):
         self.searchInterface.search_button.setText("搜索")
         self.searchInterface.setup_for_song_results()
 
-        table = self.searchInterface.result_table
         if self._handle_empty_results(songs):
             return
 
-        table.setRowCount(len(songs))
-        for i, song in enumerate(songs):
-            checkbox_item = QTableWidgetItem()
-            checkbox_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
-            checkbox_item.setCheckState(Qt.CheckState.Unchecked)
-            table.setItem(i, 0, checkbox_item)
-            table.setItem(i, 1, QTableWidgetItem(song.title))
-            table.setItem(i, 2, QTableWidgetItem(song.artist_names))
-            table.setItem(i, 3, QTableWidgetItem(song.album.name if song.album else ""))
-            table.setItem(i, 4, QTableWidgetItem(song.duration))
-            download_button = PushButton("下载", table)
-            table.setCellWidget(i, 5, download_button)
-
+        self._populate_song_table(songs)
         self._update_pagination(len(songs))
         InfoBar.success("搜索成功", f"找到了 {len(songs)} 首歌曲", duration=3000, parent=self)
 
@@ -135,6 +123,7 @@ class Window(MSFluentWindow):
         self.searchInterface.setup_for_album_results()
 
         table = self.searchInterface.result_table
+        table.clearContents()
         if self._handle_empty_results(albums):
             return
 
@@ -144,6 +133,7 @@ class Window(MSFluentWindow):
             table.setItem(i, 1, QTableWidgetItem(album.artist_names))
             table.setItem(i, 2, QTableWidgetItem(album.publish_date))
             view_button = PushButton("查看歌曲", table)
+            view_button.clicked.connect(lambda _, a=album: self.view_album_songs(a.mid))
             table.setCellWidget(i, 3, view_button)
 
         self._update_pagination(len(albums), is_song_search=False)
@@ -155,6 +145,7 @@ class Window(MSFluentWindow):
         self.searchInterface.setup_for_playlist_results()
 
         table = self.searchInterface.result_table
+        table.clearContents()
         if self._handle_empty_results(playlists):
             return
 
@@ -164,10 +155,75 @@ class Window(MSFluentWindow):
             table.setItem(i, 1, QTableWidgetItem(playlist.creator_name))
             table.setItem(i, 2, QTableWidgetItem(str(playlist.song_count)))
             view_button = PushButton("查看歌曲", table)
+            view_button.clicked.connect(
+                lambda _, p=playlist: self.view_playlist_songs(p.id)
+            )
             table.setCellWidget(i, 3, view_button)
 
         self._update_pagination(len(playlists), is_song_search=False)
         InfoBar.success("搜索成功", f"找到了 {len(playlists)} 个歌单", duration=3000, parent=self)
+
+    def view_album_songs(self, album_mid: str):
+        self.loading_bar = InfoBar.info(
+            "正在加载",
+            f"正在获取专辑歌曲...",
+            duration=-1,
+            isClosable=False,
+            parent=self,
+        )
+        coro = self.adapter.get_album_songs(album_mid)
+        self.run_async_task(coro, self.on_song_list_finished)
+
+    def view_playlist_songs(self, playlist_id: int):
+        self.loading_bar = InfoBar.info(
+            "正在加载",
+            f"正在获取歌单歌曲...",
+            duration=-1,
+            isClosable=False,
+            parent=self,
+        )
+        coro = self.adapter.get_playlist_songs(playlist_id)
+        self.run_async_task(coro, self.on_song_list_finished)
+
+    def on_song_list_finished(self, songs: List[Song]):
+        if self.loading_bar:
+            self.loading_bar.close()
+            self.loading_bar = None
+
+        self.searchInterface.setup_for_song_results()
+        table = self.searchInterface.result_table
+        table.clearContents()
+
+        if not songs:
+            InfoBar.warning("无歌曲", "未能获取到歌曲列表", duration=3000, parent=self)
+            self.searchInterface.show_bottom_controls(False)
+            return
+
+        self._populate_song_table(songs)
+        self.searchInterface.show_bottom_controls(True, is_song_search=True)
+        self.searchInterface.prev_page_button.hide()
+        self.searchInterface.next_page_button.hide()
+        self.searchInterface.page_label.hide()
+        InfoBar.success(
+            "加载成功", f"共获取到 {len(songs)} 首歌曲", duration=3000, parent=self
+        )
+
+    def _populate_song_table(self, songs: List[Song]):
+        table = self.searchInterface.result_table
+        table.setRowCount(len(songs))
+        for i, song in enumerate(songs):
+            checkbox_item = QTableWidgetItem()
+            checkbox_item.setFlags(
+                Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
+            )
+            checkbox_item.setCheckState(Qt.CheckState.Unchecked)
+            table.setItem(i, 0, checkbox_item)
+            table.setItem(i, 1, QTableWidgetItem(song.title))
+            table.setItem(i, 2, QTableWidgetItem(song.artist_names))
+            table.setItem(i, 3, QTableWidgetItem(song.album.name if song.album else ""))
+            table.setItem(i, 4, QTableWidgetItem(song.duration))
+            download_button = PushButton("下载", table)
+            table.setCellWidget(i, 5, download_button)
 
     def _handle_empty_results(self, results: list) -> bool:
         if not results:
@@ -190,6 +246,10 @@ class Window(MSFluentWindow):
         self.searchInterface.update_page_display(self.search_page, has_next=has_next, has_prev=has_prev)
 
     def handle_error(self, e: Exception):
+        if self.loading_bar:
+            self.loading_bar.close()
+            self.loading_bar = None
+
         print(f"An error occurred: {e}")
         InfoBar.error("发生错误", str(e), duration=5000, parent=self)
         if not self.searchInterface.search_button.isEnabled():
@@ -201,21 +261,15 @@ class Window(MSFluentWindow):
         worker = AsyncWorker(coro)
         thread.worker = worker
         worker.moveToThread(thread)
-
-        # Connect signals
         worker.finished.connect(on_finished_slot)
         worker.error.connect(self.handle_error)
-
-        # Connect cleanup signals for BOTH success and error paths
-        thread.finished.connect(thread.deleteLater)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
         worker.error.connect(thread.quit)
         worker.error.connect(worker.deleteLater)
-
         self.active_threads.append(thread)
         thread.finished.connect(lambda: self.active_threads.remove(thread))
-
         thread.started.connect(worker.run)
         thread.start()
 

@@ -65,21 +65,28 @@ class PlaylistSearchResult:
 #  Library Imports
 # ======================================================================================
 
-try:
-    from qqmusic_api import search
-except ImportError:
-    from enum import Enum
-    class SearchType(Enum):
-        SONG = 0
-        ALBUM = 2
-        SONGLIST = 3
 
-    class DummySearch:
-        SearchType = SearchType
-        async def search_by_type(*args, **kwargs):
-            print("Warning: qqmusic-api-python not installed. Returning empty search results.")
-            return []
-    search = DummySearch()
+from qqmusic_api import search, album as api_album, songlist as api_songlist
+
+# except ImportError:
+#     from enum import Enum
+#     class SearchType(Enum):
+#         SONG = 0
+#         ALBUM = 2
+#         SONGLIST = 3
+
+#     class DummySearch:
+#         SearchType = SearchType
+#         async def search_by_type(*args, **kwargs):
+#             print("Warning: qqmusic-api-python not installed. Returning empty search results.")
+#             return []
+#     search = DummySearch()
+#     class api_album:
+#         async def get_song(*args, **kwargs):
+#             return []
+#     class api_songlist:
+#         async def get_songlist(*args, **kwargs):
+#             return []
 
 # ======================================================================================
 #  Adapter Class
@@ -91,14 +98,12 @@ class MusicAdapter:
     standardized data models instead of raw library objects.
     """
 
-    def __init__(self):
-        pass
-
-    async def search_song(self, keyword: str, page: int = 1, limit: int = 20) -> List[Song]:
-        raw_song_dicts: List[dict] = await search.search_by_type(
-            keyword=keyword, search_type=search.SearchType.SONG, page=page, num=limit
-        )
+    def _parse_song_list(self, raw_song_dicts: List[dict]) -> List[Song]:
+        """Helper method to parse a list of raw song dicts into Song objects."""
         songs = []
+        if not isinstance(raw_song_dicts, list):
+            return []
+
         for raw_song in raw_song_dicts:
             if not isinstance(raw_song, dict):
                 continue
@@ -126,6 +131,14 @@ class MusicAdapter:
             ))
         return songs
 
+    async def search_song(
+        self, keyword: str, page: int = 1, limit: int = 20
+    ) -> List[Song]:
+        raw_song_dicts: List[dict] = await search.search_by_type(
+            keyword=keyword, search_type=search.SearchType.SONG, page=page, num=limit
+        )
+        return self._parse_song_list(raw_song_dicts)
+
     async def search_album(self, keyword: str, page: int = 1, limit: int = 20) -> List[AlbumSearchResult]:
         raw_album_dicts: List[dict] = await search.search_by_type(
             keyword=keyword, search_type=search.SearchType.ALBUM, page=page, num=limit
@@ -135,7 +148,8 @@ class MusicAdapter:
             if not isinstance(raw_album, dict):
                 continue
 
-            singer_info = raw_album.get('singer', [])
+            # Prioritize 'singer_list' for more reliable data
+            singer_info = raw_album.get("singer_list", [])
             if not isinstance(singer_info, list):
                 singer_info = []
 
@@ -144,12 +158,16 @@ class MusicAdapter:
                 for a in singer_info if isinstance(a, dict)
             ]
 
-            albums.append(AlbumSearchResult(
-                mid=raw_album.get('mid', ''),
-                name=raw_album.get('name', ''),
-                publish_date=raw_album.get('publish_date', ''),
-                artists=artists
-            ))
+            albums.append(
+                AlbumSearchResult(
+                    mid=raw_album.get(
+                        "albummid", ""
+                    ),  # FIX: Use the correct key 'albummid'
+                    name=raw_album.get("name", ""),
+                    publish_date=raw_album.get("publish_date", ""),
+                    artists=artists,
+                )
+            )
         return albums
 
     async def search_playlist(self, keyword: str, page: int = 1, limit: int = 20) -> List[PlaylistSearchResult]:
@@ -170,3 +188,13 @@ class MusicAdapter:
                 creator_name=raw_playlist.get('nickname', '')
             ))
         return playlists
+
+    async def get_album_songs(self, album_mid: str) -> List[Song]:
+        """Gets all songs from an album and returns a list of clean Song objects."""
+        raw_songs: List[dict] = await api_album.get_song(album_mid, page=1, num=200)
+        return self._parse_song_list(raw_songs)
+
+    async def get_playlist_songs(self, playlist_id: int) -> List[Song]:
+        """Gets all songs from a playlist and returns a list of clean Song objects."""
+        raw_songs: List[dict] = await api_songlist.get_songlist(playlist_id)
+        return self._parse_song_list(raw_songs)
