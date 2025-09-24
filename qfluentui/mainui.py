@@ -48,6 +48,9 @@ class Window(MSFluentWindow):
         # API Adapter
         self.adapter = MusicAdapter()
         self.active_threads = []
+        # 下载队列与并发控制
+        self.download_queue = []  # list of dict: {song, row, song_info, quality_code, download_dir}
+        self.active_downloads = 0
         self.current_song_list = []
 
         # --- Interfaces ---
@@ -353,14 +356,14 @@ class Window(MSFluentWindow):
         }
 
     def enqueue_download(self, song: Song):
-        # 在下载页新增任务行
+        # 在下载页新增任务行（初始为队列中）
         row = self.downloadInterface.add_download_task_row(song.title, song.artist_names)
 
-        # 确定音质
+        # 音质
         quality_text = self.settingInterface.quality_combo.currentText()
         quality_code = self._map_quality_text_to_code(quality_text)
 
-        # 组装 song_info 和下载目录
+        # 组装信息
         song_info = self._song_to_api_dict(song)
         download_dir = config.DOWNLOADS_DIR
         try:
@@ -368,12 +371,42 @@ class Window(MSFluentWindow):
         except Exception:
             pass
 
-        # 状态：下载中
+        # 标记状态
+        self.downloadInterface.set_row_status_text(row, '队列中')
+
+        # 入队
+        self.download_queue.append({
+            'song': song,
+            'row': row,
+            'song_info': song_info,
+            'quality_code': quality_code,
+            'download_dir': download_dir,
+        })
+        self._try_start_downloads()
+
+    def _get_max_concurrent(self) -> int:
+        try:
+            return int(self.settingInterface.concurrent_spinbox.value())
+        except Exception:
+            return int(getattr(config, 'MAX_CONCURRENT', 3))
+
+    def _try_start_downloads(self):
+        limit = self._get_max_concurrent()
+        while self.active_downloads < limit and self.download_queue:
+            task = self.download_queue.pop(0)
+            self._start_download_task(task)
+
+    def _start_download_task(self, task: dict):
+        song: Song = task['song']
+        row: int = task['row']
+        song_info = task['song_info']
+        quality_code = task['quality_code']
+        download_dir = task['download_dir']
+
+        self.active_downloads += 1
         self.downloadInterface.set_row_status_text(row, '下载中')
 
-        # 进度回调（工作线程调用，切回主线程更新UI）
         def progress_cb(downloaded: int, total: int):
-            # 工作线程发射信号到主线程更新 UI
             self.progressUpdated.emit(row, downloaded, total)
 
         async def _coro():
@@ -389,6 +422,8 @@ class Window(MSFluentWindow):
             else:
                 self.downloadInterface.set_row_status_text(row, '失败')
                 InfoBar.error('下载失败', song.title, duration=3000, parent=self)
+            self.active_downloads = max(0, self.active_downloads - 1)
+            self._try_start_downloads()
 
         self.run_async_task(_coro, _on_finished)
 
