@@ -104,8 +104,12 @@ class LoginPanel(FlyoutViewBase):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.vBoxLayout = QVBoxLayout(self)
-        self.titleLabel = TitleLabel("使用手机 QQ/微信 扫码登录", self)
-        self.titleLabel.setWordWrap(True)
+        # 使用较小字号并禁用换行，保证标题单行美观
+        self.titleLabel = SubtitleLabel("使用手机 QQ/微信 扫码登录", self)
+        self.titleLabel.setWordWrap(False)
+        self.titleLabel.setAlignment(Qt.AlignCenter)
+        # 统一控制字号，避免默认 TitleLabel 字号过大导致换行
+        self.titleLabel.setStyleSheet("font-size: 14px;")
 
         # --- QR Code Area ---
         self.qrWidget = QWidget(self)

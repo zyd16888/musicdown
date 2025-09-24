@@ -8,7 +8,7 @@ sys.path.insert(0, project_root)
 
 from PySide6.QtCore import QThread, Qt, QEvent, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QTableWidgetItem, QWidget
+from PySide6.QtWidgets import QApplication, QTableWidgetItem, QWidget, QAbstractButton
 from qfluentwidgets import (
     FluentIcon as FIF,
     MSFluentWindow,
@@ -135,9 +135,11 @@ class Window(MSFluentWindow):
         try:
             panel = LoginPanel(self)
             panel.login_succeeded.connect(self.on_login_success)
+            # 优先将弹窗锚定到“登录”导航按钮，保证弹出位置贴近按钮
+            target_widget = self._get_login_nav_button() or self.navigationInterface
             self._login_flyout = Flyout.make(
                 view=panel,
-                target=self.navigationInterface,  # 以侧栏为锚点展示
+                target=target_widget,
                 parent=self,
             )
             self._login_flyout.show()
@@ -162,6 +164,30 @@ class Window(MSFluentWindow):
                 self._login_flyout.close()
             finally:
                 self._login_flyout = None
+
+    def _get_login_nav_button(self):
+        """在导航栏中查找“登录”按钮，用于 Flyout 定位。
+        兼容不同实现：优先匹配 text，其次尝试 toolTip 或 objectName。
+        找不到则返回 None。
+        """
+        nav = getattr(self, 'navigationInterface', None)
+        if not nav:
+            return None
+        try:
+            for btn in nav.findChildren(QAbstractButton):
+                try:
+                    if btn.text() == '登录':
+                        return btn
+                    # 有些实现可能在提示或名称里保存文字
+                    if hasattr(btn, 'toolTip') and callable(btn.toolTip) and btn.toolTip() == '登录':
+                        return btn
+                    if btn.objectName() == 'loginInterface':
+                        return btn
+                except Exception:
+                    continue
+        except Exception:
+            return None
+        return None
 
     # 覆盖导航，新增“登录”按钮（置于“设置”上方）
     def initNavigation(self):
