@@ -366,24 +366,73 @@ class Window(MSFluentWindow):
         def _on_finished(ok: bool):
             if ok:
                 InfoBar.success('已登录', '已加载本地登录状态', duration=2000, parent=self)
-        self.run_async_task(_coro(), _on_finished)
+        # 传入协程函数，避免创建未被 await 的协程对象
+        self.run_async_task(_coro, _on_finished)
 
-    def run_async_task(self, coro, on_finished_slot):
+    def run_async_task(self, coro_or_func, on_finished_slot):
+        """在线程中运行协程，兼容传入协程对象或返回协程的函数。
+        注意：所有 UI 更新在主线程进行，避免跨线程 setParent 导致卡死。
+        """
         thread = QThread()
-        worker = AsyncWorker(coro)
+        worker = AsyncWorker()
         thread.worker = worker
         worker.moveToThread(thread)
-        worker.finished.connect(on_finished_slot)
-        worker.error.connect(self.handle_error)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
+
+        class _Task:
+            def __init__(self, c, cb):
+                self.coro = c
+                self.cb = cb
+
+        # 记录 task->thread 的映射，便于完成后清理
+        if not hasattr(self, "_async_threads"):
+            self._async_threads = {}
+
+        def _start_worker():
+            try:
+                coro_obj = coro_or_func() if callable(coro_or_func) else coro_or_func
+                task = _Task(coro_obj, on_finished_slot)
+                self._async_threads[id(task)] = thread
+                worker.start.emit(task)
+            except Exception as e:
+                # 报错统一回主线程处理
+                QTimer.singleShot(0, lambda: self.handle_error(e))
+                thread.quit()
+
+        worker.finished.connect(self._on_async_finished)
+        worker.failed.connect(self._on_async_failed)
+        thread.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
-        worker.error.connect(thread.quit)
-        worker.error.connect(worker.deleteLater)
         self.active_threads.append(thread)
         thread.finished.connect(lambda: self.active_threads.remove(thread))
-        thread.started.connect(worker.run)
+        thread.started.connect(_start_worker)
         thread.start()
+
+    def _cleanup_async_task(self, task):
+        try:
+            task_id = id(task)
+            t = getattr(self, "_async_threads", {}).pop(task_id, None)
+            if t is not None:
+                t.quit()
+                t.wait()
+        except Exception:
+            pass
+
+    def _on_async_finished(self, task, result):
+        # 此方法在主线程执行（接收者为 Window 对象）
+        try:
+            cb = getattr(task, "cb", None)
+            if callable(cb):
+                cb(result)
+        except Exception as e:
+            self.handle_error(e)
+        finally:
+            self._cleanup_async_task(task)
+
+    def _on_async_failed(self, task, exc: Exception):
+        try:
+            self.handle_error(exc)
+        finally:
+            self._cleanup_async_task(task)
 
 
 if __name__ == '__main__':
