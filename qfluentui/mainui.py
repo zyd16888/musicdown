@@ -375,6 +375,7 @@ class Window(MSFluentWindow):
         self.downloadInterface.set_row_status_text(row, '队列中')
 
         # 入队
+        will_start_now = self.active_downloads < self._get_max_concurrent()
         self.download_queue.append({
             'song': song,
             'row': row,
@@ -382,6 +383,11 @@ class Window(MSFluentWindow):
             'quality_code': quality_code,
             'download_dir': download_dir,
         })
+        # 提示：立即开始或进入队列
+        if will_start_now:
+            InfoBar.info('开始下载', song.title, duration=1600, parent=self)
+        else:
+            InfoBar.info('已加入队列', song.title, duration=1600, parent=self)
         self._try_start_downloads()
 
     def _get_max_concurrent(self) -> int:
@@ -439,6 +445,7 @@ class Window(MSFluentWindow):
         for idx in rows:
             if 0 <= idx < len(self.current_song_list):
                 self.enqueue_download(self.current_song_list[idx])
+        InfoBar.success('已添加', f'已添加 {len(rows)} 首到下载队列', duration=1800, parent=self)
 
     def _handle_empty_results(self, results: list) -> bool:
         if not results:
