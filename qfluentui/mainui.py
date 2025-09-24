@@ -1,5 +1,5 @@
 import sys
-from typing import List
+from typing import List, Optional
 
 # Add project root to Python path
 import os
@@ -139,16 +139,7 @@ class Window(MSFluentWindow):
             duration=3000,
             parent=self,
         )
-        # 在页面内更新登录状态显示：隐藏扫码面板，展示状态标签
-        if hasattr(self, 'loginPanel'):
-            try:
-                self.loginPanel.hide()
-            except Exception:
-                pass
-        if hasattr(self, 'loginStatusLabel'):
-            uid = getattr(credential, 'musicid', '-')
-            self.loginStatusLabel.setText(f"已登录：用户ID {uid}")
-            self.loginStatusLabel.show()
+        self.update_login_ui(True, getattr(credential, 'musicid', '-'))
 
     # 覆盖导航，新增“登录”按钮（置于“设置”上方）
     def initNavigation(self):
@@ -366,6 +357,8 @@ class Window(MSFluentWindow):
         def _on_finished(ok: bool):
             if ok:
                 InfoBar.success('已登录', '已加载本地登录状态', duration=2000, parent=self)
+                uid = getattr(getattr(api, 'credential', None), 'musicid', '-')
+                self.update_login_ui(True, uid)
         # 传入协程函数，避免创建未被 await 的协程对象
         self.run_async_task(_coro, _on_finished)
 
@@ -406,6 +399,24 @@ class Window(MSFluentWindow):
         thread.finished.connect(lambda: self.active_threads.remove(thread))
         thread.started.connect(_start_worker)
         thread.start()
+
+    # --- 登录页 UI 切换 ---
+    def update_login_ui(self, logged_in: bool, uid: Optional[str] = None):
+        """根据登录状态切换登录页显示，保证不会二维码与已登录同时出现。"""
+        try:
+            if logged_in:
+                if hasattr(self, 'loginPanel') and self.loginPanel.isVisible():
+                    self.loginPanel.hide()  # 触发内部线程停止
+                if hasattr(self, 'loginStatusLabel'):
+                    self.loginStatusLabel.setText(f"已登录：用户ID {uid or '-'}")
+                    self.loginStatusLabel.show()
+            else:
+                if hasattr(self, 'loginStatusLabel'):
+                    self.loginStatusLabel.hide()
+                if hasattr(self, 'loginPanel'):
+                    self.loginPanel.show()
+        except Exception:
+            pass
 
     def _cleanup_async_task(self, task):
         try:

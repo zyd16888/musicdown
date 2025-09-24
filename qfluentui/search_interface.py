@@ -1,7 +1,7 @@
 from typing import List
 
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QHeaderView, QVBoxLayout, QTableWidgetItem
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QHeaderView, QVBoxLayout, QTableWidgetItem, QStyle
 from qfluentwidgets import (
     BodyLabel, CheckBox, ComboBox, FluentIcon as FIF, LineEdit,
     PrimaryPushButton, PushButton, SearchLineEdit, SpinBox, TableWidget,
@@ -86,12 +86,27 @@ class SearchInterface(QFrame):
     def setup_for_song_results(self):
         self.result_table.setColumnCount(6)
         self.result_table.setHorizontalHeaderLabels(['', '标题', '歌手', '专辑', '时长', '操作'])
+        # 列宽：勾选框列固定到合适宽度，其余文本列自适应
+        header = self.result_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.result_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.result_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.result_table.horizontalHeader().resizeSection(0, 40)
-        self.result_table.horizontalHeader().resizeSection(4, 100)
-        self.result_table.horizontalHeader().resizeSection(5, 120)
+        # 动态按照样式计算勾选框指标宽度，留出左右边距，避免被裁切
+        try:
+            style = self.result_table.style()
+            indicator_w = style.pixelMetric(QStyle.PM_IndicatorWidth)
+            indicator_h = style.pixelMetric(QStyle.PM_IndicatorHeight)
+            h_margin = style.pixelMetric(QStyle.PM_FocusFrameHMargin)
+        except Exception:
+            indicator_w, indicator_h, h_margin = 16, 16, 3
+        # 取指示器较大边 + 两侧边距 + 额外余量，避免高DPI/缩放裁切
+        base = max(indicator_w, indicator_h)
+        checkbox_w = base + (h_margin * 2) + 28
+        checkbox_w = int(max(48, min(72, checkbox_w)))
+        header.resizeSection(0, checkbox_w)
+        header.resizeSection(4, 100)
+        header.resizeSection(5, 120)
 
     def setup_for_album_results(self):
         self.result_table.setColumnCount(4)
