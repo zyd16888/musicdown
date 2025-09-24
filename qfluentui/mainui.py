@@ -8,14 +8,14 @@ sys.path.insert(0, project_root)
 
 from PySide6.QtCore import QThread, Qt, QEvent, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QTableWidgetItem, QWidget, QAbstractButton
+from PySide6.QtWidgets import QApplication, QTableWidgetItem, QWidget, QVBoxLayout
 from qfluentwidgets import (
     FluentIcon as FIF,
     MSFluentWindow,
     NavigationItemPosition,
     InfoBar,
     PushButton,
-    Flyout,
+    BodyLabel,
 )
 
 # Local imports
@@ -121,30 +121,10 @@ class Window(MSFluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
 
-    # --- 登录弹窗逻辑 ---
+    # --- 登录界面（内嵌展示，无弹窗） ---
     def eventFilter(self, obj, event):
-        if (
-            hasattr(self, "loginInterface")
-            and obj is self.loginInterface
-            and event.type() == QEvent.Show
-        ):
-            QTimer.singleShot(0, self.show_login_flyout)
+        # 目前不需要特殊事件，直接保持默认行为
         return super().eventFilter(obj, event)
-
-    def show_login_flyout(self):
-        try:
-            panel = LoginPanel(self)
-            panel.login_succeeded.connect(self.on_login_success)
-            # 优先将弹窗锚定到“登录”导航按钮，保证弹出位置贴近按钮
-            target_widget = self._get_login_nav_button() or self.navigationInterface
-            self._login_flyout = Flyout.make(
-                view=panel,
-                target=target_widget,
-                parent=self,
-            )
-            self._login_flyout.show()
-        except Exception as e:
-            InfoBar.error("错误", f"无法显示登录面板: {e}", duration=3000, parent=self)
 
     def on_login_success(self, credential):
         try:
@@ -159,35 +139,16 @@ class Window(MSFluentWindow):
             duration=3000,
             parent=self,
         )
-        if hasattr(self, "_login_flyout") and self._login_flyout:
+        # 在页面内更新登录状态显示：隐藏扫码面板，展示状态标签
+        if hasattr(self, 'loginPanel'):
             try:
-                self._login_flyout.close()
-            finally:
-                self._login_flyout = None
-
-    def _get_login_nav_button(self):
-        """在导航栏中查找“登录”按钮，用于 Flyout 定位。
-        兼容不同实现：优先匹配 text，其次尝试 toolTip 或 objectName。
-        找不到则返回 None。
-        """
-        nav = getattr(self, 'navigationInterface', None)
-        if not nav:
-            return None
-        try:
-            for btn in nav.findChildren(QAbstractButton):
-                try:
-                    if btn.text() == '登录':
-                        return btn
-                    # 有些实现可能在提示或名称里保存文字
-                    if hasattr(btn, 'toolTip') and callable(btn.toolTip) and btn.toolTip() == '登录':
-                        return btn
-                    if btn.objectName() == 'loginInterface':
-                        return btn
-                except Exception:
-                    continue
-        except Exception:
-            return None
-        return None
+                self.loginPanel.hide()
+            except Exception:
+                pass
+        if hasattr(self, 'loginStatusLabel'):
+            uid = getattr(credential, 'musicid', '-')
+            self.loginStatusLabel.setText(f"已登录：用户ID {uid}")
+            self.loginStatusLabel.show()
 
     # 覆盖导航，新增“登录”按钮（置于“设置”上方）
     def initNavigation(self):
@@ -199,11 +160,19 @@ class Window(MSFluentWindow):
         # 底部功能
         self.addSubInterface(self.logInterface, FIF.DOCUMENT, '日志', position=NavigationItemPosition.BOTTOM)
 
-        # 登录入口需要非空 objectName
+        # 登录入口：直接在页面内嵌登录面板
         self.loginInterface = QWidget(self)
         self.loginInterface.setObjectName('loginInterface')
         self.addSubInterface(self.loginInterface, FIF.PEOPLE, '登录', position=NavigationItemPosition.BOTTOM)
-        self.loginInterface.installEventFilter(self)
+        # 内嵌布局：居中显示扫码与状态
+        self.loginLayout = QVBoxLayout(self.loginInterface)
+        self.loginLayout.setAlignment(Qt.AlignCenter)
+        self.loginPanel = LoginPanel(self.loginInterface)
+        self.loginPanel.login_succeeded.connect(self.on_login_success)
+        self.loginStatusLabel = BodyLabel('', self.loginInterface)
+        self.loginStatusLabel.hide()
+        self.loginLayout.addWidget(self.loginPanel)
+        self.loginLayout.addWidget(self.loginStatusLabel, 0, Qt.AlignCenter)
 
         self.addSubInterface(self.settingInterface, FIF.SETTING, '设置', position=NavigationItemPosition.BOTTOM)
 
