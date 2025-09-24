@@ -6,12 +6,16 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
-from PySide6.QtCore import QThread, Qt
+from PySide6.QtCore import QThread, Qt, QEvent, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QTableWidgetItem
+from PySide6.QtWidgets import QApplication, QTableWidgetItem, QWidget
 from qfluentwidgets import (
-    FluentIcon as FIF, MSFluentWindow, NavigationItemPosition,
-    InfoBar, PushButton
+    FluentIcon as FIF,
+    MSFluentWindow,
+    NavigationItemPosition,
+    InfoBar,
+    PushButton,
+    Flyout,
 )
 
 # Local imports
@@ -22,6 +26,7 @@ from qfluentui.playlist_interface import PlaylistInterface
 from qfluentui.search_interface import SearchInterface
 from qfluentui.setting_interface import SettingInterface
 from qfluentui.worker import AsyncWorker
+from qfluentui.login import LoginPanel
 
 
 class Window(MSFluentWindow):
@@ -50,6 +55,13 @@ class Window(MSFluentWindow):
         self.initNavigation()
         self.initWindow()
         self.connect_signals()
+        # 尝试在启动时加载并验证登录状态（若已保存）
+        try:
+            from api.qqmusic import QQMusicAPI
+            self.__qqapi_auto__ = QQMusicAPI()
+            self._validate_login_on_startup()
+        except Exception:
+            self.__qqapi_auto__ = None
 
     def initNavigation(self):
         self.addSubInterface(self.searchInterface, FIF.SEARCH, '搜索')
@@ -77,6 +89,97 @@ class Window(MSFluentWindow):
     def go_to_next_page(self):
         self.search_page += 1
         self.start_search(is_new_search=False)
+
+    # 重写导航初始化：在“设置”上方增加“登录”入口
+    def initNavigation(self):
+        # 顶部功能
+        self.addSubInterface(self.searchInterface, FIF.SEARCH, "搜索")
+        self.addSubInterface(self.playlistInterface, FIF.MUSIC_FOLDER, "歌单")
+        self.addSubInterface(self.downloadInterface, FIF.DOWNLOAD, "下载")
+
+        # 底部功能：日志、登录、设置（登录位于设置上方）
+        self.addSubInterface(
+            self.logInterface,
+            FIF.DOCUMENT,
+            "日志",
+            position=NavigationItemPosition.BOTTOM,
+        )
+
+        self.loginInterface = QWidget(self)
+        self.addSubInterface(
+            self.loginInterface,
+            FIF.DOCUMENT,
+            "登录",
+            position=NavigationItemPosition.BOTTOM,
+        )
+        self.loginInterface.installEventFilter(self)
+
+        self.addSubInterface(
+            self.settingInterface,
+            FIF.SETTING,
+            "设置",
+            position=NavigationItemPosition.BOTTOM,
+        )
+
+    # --- 登录弹窗逻辑 ---
+    def eventFilter(self, obj, event):
+        if (
+            hasattr(self, "loginInterface")
+            and obj is self.loginInterface
+            and event.type() == QEvent.Show
+        ):
+            QTimer.singleShot(0, self.show_login_flyout)
+        return super().eventFilter(obj, event)
+
+    def show_login_flyout(self):
+        try:
+            panel = LoginPanel(self)
+            panel.login_succeeded.connect(self.on_login_success)
+            self._login_flyout = Flyout.make(
+                view=panel,
+                target=self.navigationInterface,  # 以侧栏为锚点展示
+                parent=self,
+            )
+            self._login_flyout.show()
+        except Exception as e:
+            InfoBar.error("错误", f"无法显示登录面板: {e}", duration=3000, parent=self)
+
+    def on_login_success(self, credential):
+        try:
+            from api.qqmusic import QQMusicAPI
+            QQMusicAPI().save_credential(credential)
+        except Exception:
+            pass
+
+        InfoBar.success(
+            "登录成功",
+            f"用户ID: {getattr(credential, 'musicid', '-')}",
+            duration=3000,
+            parent=self,
+        )
+        if hasattr(self, "_login_flyout") and self._login_flyout:
+            try:
+                self._login_flyout.close()
+            finally:
+                self._login_flyout = None
+
+    # 覆盖导航，新增“登录”按钮（置于“设置”上方）
+    def initNavigation(self):
+        # 顶部功能
+        self.addSubInterface(self.searchInterface, FIF.SEARCH, '搜索')
+        self.addSubInterface(self.playlistInterface, FIF.MUSIC_FOLDER, '歌单')
+        self.addSubInterface(self.downloadInterface, FIF.DOWNLOAD, '下载')
+
+        # 底部功能
+        self.addSubInterface(self.logInterface, FIF.DOCUMENT, '日志', position=NavigationItemPosition.BOTTOM)
+
+        # 登录入口需要非空 objectName
+        self.loginInterface = QWidget(self)
+        self.loginInterface.setObjectName('loginInterface')
+        self.addSubInterface(self.loginInterface, FIF.PEOPLE, '登录', position=NavigationItemPosition.BOTTOM)
+        self.loginInterface.installEventFilter(self)
+
+        self.addSubInterface(self.settingInterface, FIF.SETTING, '设置', position=NavigationItemPosition.BOTTOM)
 
     def start_search(self, is_new_search: bool = True):
         if is_new_search:
@@ -256,6 +359,20 @@ class Window(MSFluentWindow):
             self.searchInterface.search_button.setEnabled(True)
             self.searchInterface.search_button.setText("搜索")
 
+    def _validate_login_on_startup(self):
+        # 异步验证已保存的登录凭据
+        try:
+            from api.qqmusic import QQMusicAPI
+            api = QQMusicAPI()
+        except Exception:
+            return
+        async def _coro():
+            return await api.is_logged_in()
+        def _on_finished(ok: bool):
+            if ok:
+                InfoBar.success('已登录', '已加载本地登录状态', duration=2000, parent=self)
+        self.run_async_task(_coro(), _on_finished)
+
     def run_async_task(self, coro, on_finished_slot):
         thread = QThread()
         worker = AsyncWorker(coro)
@@ -279,3 +396,4 @@ if __name__ == '__main__':
     w = Window()
     w.show()
     app.exec()
+

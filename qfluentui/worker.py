@@ -2,23 +2,28 @@ import asyncio
 from PySide6.QtCore import QObject, Signal, Slot
 
 class AsyncWorker(QObject):
-    """
-    A worker that runs an asyncio coroutine in a separate thread.
-    It is designed to be moved to a QThread.
-    """
-    finished = Signal(object)
-    error = Signal(Exception)
+    """ A reusable worker for running asyncio coroutines. """
+    finished = Signal(object, object) # task, result
+    failed = Signal(object, Exception)   # task, exception
+    start = Signal(object)               # task
 
-    def __init__(self, coro, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.coro = coro
+        self.start.connect(self.run)
+        self._is_busy = False
 
-    @Slot()
-    def run(self):
-        """Runs the coroutine using asyncio.run()."""
+    @Slot(object)
+    def run(self, task):
+        if self._is_busy:
+            return
+
+        self._is_busy = True
         try:
-            # asyncio.run() automatically manages the event loop
-            result = asyncio.run(self.coro)
-            self.finished.emit(result)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(task.coro)
+            self.finished.emit(task, result)
         except Exception as e:
-            self.error.emit(e)
+            self.failed.emit(task, e)
+        finally:
+            self._is_busy = False
