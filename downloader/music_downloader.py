@@ -25,7 +25,7 @@ class MusicDownloader:
         self.download_manager = DownloadManager()
         self.log = logger.log_progress
 
-    async def download_song(self, song_info: Dict, download_dir: Path, filetype: str = 'm4a', cookie: str = None) -> Optional[Path]:
+    async def download_song(self, song_info: Dict, download_dir: Path, filetype: str = 'm4a', cookie: str = None, progress_cb=None) -> Optional[Path]:
         """下载歌曲并处理封面、歌词等
 
         Args:
@@ -72,8 +72,11 @@ class MusicDownloader:
             temp_filepath = await get_file_path(song_info, song_url, download_dir)
             self.log(f"准备下载歌曲到: {temp_filepath.name}")
 
+            # 开始下载
+            if callable(self.log):
+                self.log("开始下载...")
             download_success = await self.download_manager.download_with_progress(
-                song_url, temp_filepath
+                song_url, temp_filepath, progress_cb=progress_cb
             )
             if not download_success:
                 self.log("下载歌曲失败，请检查网络连接或重试")

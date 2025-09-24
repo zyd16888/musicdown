@@ -6,7 +6,7 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
-from PySide6.QtCore import QThread, Qt, QEvent, QTimer
+from PySide6.QtCore import QThread, Qt, QEvent, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QTableWidgetItem, QWidget, QVBoxLayout
 from qfluentwidgets import (
@@ -27,9 +27,13 @@ from qfluentui.search_interface import SearchInterface
 from qfluentui.setting_interface import SettingInterface
 from qfluentui.worker import AsyncWorker
 from qfluentui.login import LoginPanel
+from utils.config import config
+from downloader.music_downloader import MusicDownloader
 
 
 class Window(MSFluentWindow):
+    # 跨线程下载进度信号：row, downloadedBytes, totalBytes
+    progressUpdated = Signal(int, int, int)
     """ 主界面 """
 
     def __init__(self):
@@ -44,6 +48,7 @@ class Window(MSFluentWindow):
         # API Adapter
         self.adapter = MusicAdapter()
         self.active_threads = []
+        self.current_song_list = []
 
         # --- Interfaces ---
         self.searchInterface = SearchInterface(self)
@@ -55,6 +60,8 @@ class Window(MSFluentWindow):
         self.initNavigation()
         self.initWindow()
         self.connect_signals()
+        # 连接跨线程进度更新到主线程 UI
+        self.progressUpdated.connect(self._on_progress_updated)
         # 尝试在启动时加载并验证登录状态（若已保存）
         try:
             from api.qqmusic import QQMusicAPI
@@ -80,6 +87,7 @@ class Window(MSFluentWindow):
         self.searchInterface.search_input.returnPressed.connect(lambda: self.start_search(is_new_search=True))
         self.searchInterface.prev_page_button.clicked.connect(self.go_to_previous_page)
         self.searchInterface.next_page_button.clicked.connect(self.go_to_next_page)
+        self.searchInterface.batch_download_button.clicked.connect(self.batch_download_selected)
 
     def go_to_previous_page(self):
         if self.search_page > 1:
@@ -202,6 +210,7 @@ class Window(MSFluentWindow):
         if self._handle_empty_results(songs):
             return
 
+        self.current_song_list = songs
         self._populate_song_table(songs)
         self._update_pagination(len(songs))
         InfoBar.success("搜索成功", f"找到了 {len(songs)} 首歌曲", duration=3000, parent=self)
@@ -288,6 +297,7 @@ class Window(MSFluentWindow):
             self.searchInterface.show_bottom_controls(False)
             return
 
+        self.current_song_list = songs
         self._populate_song_table(songs)
         self.searchInterface.show_bottom_controls(True, is_song_search=True)
         self.searchInterface.prev_page_button.hide()
@@ -312,7 +322,88 @@ class Window(MSFluentWindow):
             table.setItem(i, 3, QTableWidgetItem(song.album.name if song.album else ""))
             table.setItem(i, 4, QTableWidgetItem(song.duration))
             download_button = PushButton("下载", table)
+            download_button.clicked.connect(lambda _, s=song: self.enqueue_download(s))
             table.setCellWidget(i, 5, download_button)
+
+    # --- 下载相关 ---
+    def _map_quality_text_to_code(self, text: str) -> str:
+        mapping = {
+            'M4A': 'm4a',
+            'MP3 128kbps': '128',
+            'MP3 320kbps': '320',
+            'FLAC': 'flac',
+            '臻品音质2.0': 'ATMOS_51',
+            '臻品全景声2.0': 'ATMOS_2',
+            '臻品母带2.0': 'MASTER',
+        }
+        return mapping.get(text, config.DEFAULT_QUALITY)
+
+    def _song_to_api_dict(self, song: Song) -> dict:
+        artists = [{'name': a.name, 'mid': a.mid} for a in (song.artists or [])]
+        album_mid = song.album.mid if song.album else ''
+        return {
+            'name': song.title,
+            'mid': song.mid,
+            'singer': artists,
+            'album': {
+                'mid': album_mid,
+                'name': song.album.name if song.album else ''
+            },
+            'interval': song.interval,
+        }
+
+    def enqueue_download(self, song: Song):
+        # 在下载页新增任务行
+        row = self.downloadInterface.add_download_task_row(song.title, song.artist_names)
+
+        # 确定音质
+        quality_text = self.settingInterface.quality_combo.currentText()
+        quality_code = self._map_quality_text_to_code(quality_text)
+
+        # 组装 song_info 和下载目录
+        song_info = self._song_to_api_dict(song)
+        download_dir = config.DOWNLOADS_DIR
+        try:
+            download_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+        # 状态：下载中
+        self.downloadInterface.set_row_status_text(row, '下载中')
+
+        # 进度回调（工作线程调用，切回主线程更新UI）
+        def progress_cb(downloaded: int, total: int):
+            # 工作线程发射信号到主线程更新 UI
+            self.progressUpdated.emit(row, downloaded, total)
+
+        async def _coro():
+            md = MusicDownloader()
+            return await md.download_song(song_info, download_dir, filetype=quality_code, progress_cb=progress_cb)
+
+        def _on_finished(result_path):
+            if result_path:
+                self.downloadInterface.set_row_progress(row, 100)
+                self.downloadInterface.set_row_status_text(row, '完成')
+                self.downloadInterface.set_row_path(row, str(result_path))
+                InfoBar.success('下载完成', song.title, duration=2000, parent=self)
+            else:
+                self.downloadInterface.set_row_status_text(row, '失败')
+                InfoBar.error('下载失败', song.title, duration=3000, parent=self)
+
+        self.run_async_task(_coro, _on_finished)
+
+    def _on_progress_updated(self, row: int, downloaded: int, total: int):
+        if total > 0:
+            self.downloadInterface.set_row_progress_bytes(row, downloaded, total)
+
+    def batch_download_selected(self):
+        rows = self.searchInterface.get_checked_rows()
+        if not rows:
+            InfoBar.info('未选择', '请先勾选要下载的歌曲', duration=2000, parent=self)
+            return
+        for idx in rows:
+            if 0 <= idx < len(self.current_song_list):
+                self.enqueue_download(self.current_song_list[idx])
 
     def _handle_empty_results(self, results: list) -> bool:
         if not results:
