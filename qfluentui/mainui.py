@@ -29,7 +29,6 @@ from qfluentui.worker import AsyncWorker
 from qfluentui.login import LoginPanel
 from utils.config import config
 from downloader.music_downloader import MusicDownloader
-from api.qqmusic import QQMusicAPI
 
 
 class Window(MSFluentWindow):
@@ -322,12 +321,8 @@ class Window(MSFluentWindow):
             InfoBar.info('提示', '请输入QQ音乐歌单分享链接', duration=2000, parent=self)
             return
         async def _coro():
-            api = QQMusicAPI()
-            disstid = await api.resolve_playlist_id_from_share(link)
-            if not disstid:
-                return None
-            # 取所有歌曲
-            return await self.adapter.get_playlist_songs(disstid)
+            # 直接通过适配器解析短链并获取歌曲
+            return await self.adapter.get_playlist_songs_by_share_link(link)
         def _on_finished(songs: Optional[List[Song]]):
             if not songs:
                 InfoBar.error('获取失败', '无法解析该分享链接', duration=2500, parent=self)
@@ -355,11 +350,15 @@ class Window(MSFluentWindow):
             table.setItem(i, 2, QTableWidgetItem(song.artist_names))
             table.setItem(i, 3, QTableWidgetItem(song.album.name if song.album else ''))
             table.setItem(i, 4, QTableWidgetItem(song.duration))
+            # 操作列：按钮与 tooltip（显示可用音质），与搜索页一致
             av = getattr(song, 'available_qualities', []) or []
-            table.setItem(i, 5, QTableWidgetItem(' / '.join(name_map.get(x, x) for x in av)))
             btn = PushButton('下载', table)
+            if av:
+                btn.setToolTip('可用音质：' + ' / '.join(name_map.get(x, x) for x in av))
+            else:
+                btn.setToolTip('可用音质：未知或受限')
             btn.clicked.connect(lambda _, s=song: self.enqueue_download(s))
-            table.setCellWidget(i, 6, btn)
+            table.setCellWidget(i, 5, btn)
 
     def on_playlist_select_all(self):
         table = self.playlistInterface.playlist_table

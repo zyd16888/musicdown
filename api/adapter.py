@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict
 import asyncio
+import re
+from urllib.parse import urlparse, parse_qs
 
 # ======================================================================================
 #  Data Models
@@ -69,6 +71,7 @@ class PlaylistSearchResult:
     # ======================================================================================
 
 from qqmusic_api import search, album as api_album, songlist as api_songlist
+from utils.network import network
 
 # except ImportError:
 #     from enum import Enum
@@ -291,3 +294,46 @@ class MusicAdapter:
         """Gets all songs from a playlist and returns a list of clean Song objects."""
         raw_songs: List[dict] = await api_songlist.get_songlist(playlist_id)
         return self._parse_song_list(raw_songs)
+
+    # ============================
+    #  Share Link Utilities
+    # ============================
+    async def resolve_playlist_id_from_share(self, url: str) -> Optional[int]:
+        """Resolve QQ Music playlist disstid from a share URL.
+
+        Supports:
+        - https://c*.y.qq.com/base/fcgi-bin/u?__=... (short link → 302)
+        - https://y.qq.com/n/ryqq/playlist/<id>
+        - https://y.qq.com/playlist.html?id=<id>
+        Returns: int disstid or None
+        """
+        final_url = url
+        try:
+            client = await network._ensure_async_client()
+            resp = await client.get(url, follow_redirects=True)
+            final_url = str(resp.url)
+        except Exception:
+            # fallback: keep original url
+            pass
+
+        try:
+            pr = urlparse(final_url)
+            qs = parse_qs(pr.query)
+            # query id
+            if 'id' in qs and qs['id']:
+                v = qs['id'][0]
+                return int(v) if v.isdigit() else None
+            # path pattern /playlist/<digits> or /n/ryqq/playlist/<digits>
+            m = re.search(r"/(?:n/ryqq/)?playlist/(\d+)", pr.path)
+            if m:
+                return int(m.group(1))
+        except Exception:
+            return None
+        return None
+
+    async def get_playlist_songs_by_share_link(self, share_url: str) -> List[Song]:
+        """High-level helper: resolve share URL then fetch all songs as Song list."""
+        disstid = await self.resolve_playlist_id_from_share(share_url)
+        if not disstid:
+            return []
+        return await self.get_playlist_songs(disstid)

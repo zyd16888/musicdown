@@ -36,9 +36,9 @@ class PlaylistInterface(QFrame):
         self.link_input_layout.addWidget(self.link_input, 1)
         self.link_input_layout.addWidget(self.get_playlist_button)
 
-        # Table
-        self.playlist_table.setColumnCount(7)
-        self.playlist_table.setHorizontalHeaderLabels(["", "歌曲名", "歌手", "专辑", "时长", "可用格式", "操作"])
+        # Table（与搜索页面保持一致：不单独展示可用音质列）
+        self.playlist_table.setColumnCount(6)
+        self.playlist_table.setHorizontalHeaderLabels(["", "歌曲名", "歌手", "专辑", "时长", "操作"])
         self.playlist_table.setEditTriggers(TableWidget.EditTrigger.NoEditTriggers)
         
         # Set column width
@@ -47,8 +47,7 @@ class PlaylistInterface(QFrame):
         self.playlist_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.playlist_table.horizontalHeader().resizeSection(0, 40)  # Checkbox
         self.playlist_table.horizontalHeader().resizeSection(4, 100)  # Duration
-        self.playlist_table.horizontalHeader().resizeSection(5, 150)  # Formats
-        self.playlist_table.horizontalHeader().resizeSection(6, 120)  # Action
+        self.playlist_table.horizontalHeader().resizeSection(5, 120)  # Action
 
         # Action buttons
         self.action_button_layout.addWidget(self.select_all_button)
