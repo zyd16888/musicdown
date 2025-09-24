@@ -29,6 +29,7 @@ from qfluentui.worker import AsyncWorker
 from qfluentui.login import LoginPanel
 from utils.config import config
 from downloader.music_downloader import MusicDownloader
+from api.qqmusic import QQMusicAPI
 
 
 class Window(MSFluentWindow):
@@ -91,6 +92,10 @@ class Window(MSFluentWindow):
         self.searchInterface.prev_page_button.clicked.connect(self.go_to_previous_page)
         self.searchInterface.next_page_button.clicked.connect(self.go_to_next_page)
         self.searchInterface.batch_download_button.clicked.connect(self.batch_download_selected)
+        # playlist signals
+        self.playlistInterface.get_playlist_button.clicked.connect(self.on_get_playlist_from_link)
+        self.playlistInterface.select_all_button.clicked.connect(self.on_playlist_select_all)
+        self.playlistInterface.batch_download_button.clicked.connect(self.batch_download_selected_in_playlist)
 
     def go_to_previous_page(self):
         if self.search_page > 1:
@@ -310,6 +315,70 @@ class Window(MSFluentWindow):
             "加载成功", f"共获取到 {len(songs)} 首歌曲", duration=3000, parent=self
         )
 
+    # --- 歌单分享链接 ---
+    def on_get_playlist_from_link(self):
+        link = self.playlistInterface.link_input.text().strip()
+        if not link:
+            InfoBar.info('提示', '请输入QQ音乐歌单分享链接', duration=2000, parent=self)
+            return
+        async def _coro():
+            api = QQMusicAPI()
+            disstid = await api.resolve_playlist_id_from_share(link)
+            if not disstid:
+                return None
+            # 取所有歌曲
+            return await self.adapter.get_playlist_songs(disstid)
+        def _on_finished(songs: Optional[List[Song]]):
+            if not songs:
+                InfoBar.error('获取失败', '无法解析该分享链接', duration=2500, parent=self)
+                return
+            self._populate_playlist_table(songs)
+            InfoBar.success('成功', f'共获取到 {len(songs)} 首歌曲', duration=2000, parent=self)
+        self.run_async_task(_coro, _on_finished)
+
+    def _populate_playlist_table(self, songs: List[Song]):
+        table = self.playlistInterface.playlist_table
+        table.clearContents()
+        table.setRowCount(len(songs))
+        name_map = {
+            'MASTER': '臻品母带2.0','ATMOS_51': '臻品音质2.0','ATMOS_2': '臻品全景声2.0','FLAC': 'FLAC',
+            'OGG_640': 'OGG 640kbps','OGG_320': 'OGG 320kbps','OGG_192': 'OGG 192kbps','OGG_96': 'OGG 96kbps',
+            'MP3_320': 'MP3 320kbps','MP3_128': 'MP3 128kbps','ACC_192': 'M4A 192kbps','ACC_96': 'M4A 96kbps','ACC_48': 'M4A 48kbps'
+        }
+        self.current_song_list = songs
+        for i, song in enumerate(songs):
+            cb_item = QTableWidgetItem()
+            cb_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            cb_item.setCheckState(Qt.CheckState.Unchecked)
+            table.setItem(i, 0, cb_item)
+            table.setItem(i, 1, QTableWidgetItem(song.title))
+            table.setItem(i, 2, QTableWidgetItem(song.artist_names))
+            table.setItem(i, 3, QTableWidgetItem(song.album.name if song.album else ''))
+            table.setItem(i, 4, QTableWidgetItem(song.duration))
+            av = getattr(song, 'available_qualities', []) or []
+            table.setItem(i, 5, QTableWidgetItem(' / '.join(name_map.get(x, x) for x in av)))
+            btn = PushButton('下载', table)
+            btn.clicked.connect(lambda _, s=song: self.enqueue_download(s))
+            table.setCellWidget(i, 6, btn)
+
+    def on_playlist_select_all(self):
+        table = self.playlistInterface.playlist_table
+        for i in range(table.rowCount()):
+            item = table.item(i, 0)
+            if item:
+                item.setCheckState(Qt.CheckState.Checked)
+
+    def batch_download_selected_in_playlist(self):
+        table = self.playlistInterface.playlist_table
+        rows = [i for i in range(table.rowCount()) if table.item(i,0) and table.item(i,0).checkState()==Qt.CheckState.Checked]
+        if not rows:
+            InfoBar.info('未选择', '请先勾选要下载的歌曲', duration=2000, parent=self)
+            return
+        for idx in rows:
+            if 0 <= idx < len(self.current_song_list):
+                self.enqueue_download(self.current_song_list[idx])
+        InfoBar.success('已添加', f'已添加 {len(rows)} 首到下载队列', duration=1800, parent=self)
+
     def _populate_song_table(self, songs: List[Song]):
         table = self.searchInterface.result_table
         table.setRowCount(len(songs))
@@ -325,21 +394,57 @@ class Window(MSFluentWindow):
             table.setItem(i, 3, QTableWidgetItem(song.album.name if song.album else ""))
             table.setItem(i, 4, QTableWidgetItem(song.duration))
             download_button = PushButton("下载", table)
+            download_button.setToolTip("检查可用音质...")
             download_button.clicked.connect(lambda _, s=song: self.enqueue_download(s))
             table.setCellWidget(i, 5, download_button)
+
+        # 直接使用搜索结果中解析的可用音质，更新按钮 tooltip
+        table = self.searchInterface.result_table
+        name_map = {
+            # Canonical
+            'MASTER': '臻品母带2.0',
+            'ATMOS_51': '臻品音质2.0',
+            'ATMOS_2': '臻品全景声2.0',
+            'FLAC': 'FLAC',
+            'OGG_640': 'OGG 640kbps',
+            'OGG_320': 'OGG 320kbps',
+            'OGG_192': 'OGG 192kbps',
+            'OGG_96': 'OGG 96kbps',
+            'MP3_320': 'MP3 320kbps',
+            'MP3_128': 'MP3 128kbps',
+            'ACC_192': 'M4A 192kbps',
+            'ACC_96': 'M4A 96kbps',
+            'ACC_48': 'M4A 48kbps',
+            # 'ACC_24': 'M4A 24kbps',  # 库未包含该档
+            # Compatibility (legacy codes)
+            'flac': 'FLAC',
+            '320': 'MP3 320kbps',
+            '128': 'MP3 128kbps',
+            'm4a': 'M4A',
+        }
+        for row, s in enumerate(songs):
+            btn = table.cellWidget(row, 5)
+            if not btn:
+                continue
+            av = getattr(s, 'available_qualities', []) or []
+            if av:
+                btn.setToolTip('可用音质：' + ' / '.join(name_map.get(x, x) for x in av))
+            else:
+                btn.setToolTip('可用音质：未知或受限')
 
     # --- 下载相关 ---
     def _map_quality_text_to_code(self, text: str) -> str:
         mapping = {
-            'M4A': 'm4a',
-            'MP3 128kbps': '128',
-            'MP3 320kbps': '320',
-            'FLAC': 'flac',
+            'M4A': 'ACC_BEST',         # 由实际可用 AAC 档位展开
+            'MP3 128kbps': 'MP3_128',
+            'MP3 320kbps': 'MP3_320',
+            'FLAC': 'FLAC',
             '臻品音质2.0': 'ATMOS_51',
             '臻品全景声2.0': 'ATMOS_2',
             '臻品母带2.0': 'MASTER',
         }
-        return mapping.get(text, config.DEFAULT_QUALITY)
+        # 默认质量来自配置（兼容旧值）
+        return mapping.get(text, getattr(config, 'DEFAULT_QUALITY', 'FLAC'))
 
     def _song_to_api_dict(self, song: Song) -> dict:
         artists = [{'name': a.name, 'mid': a.mid} for a in (song.artists or [])]
@@ -417,7 +522,45 @@ class Window(MSFluentWindow):
 
         async def _coro():
             md = MusicDownloader()
-            return await md.download_song(song_info, download_dir, filetype=quality_code, progress_cb=progress_cb)
+            # 构建尝试序列：优先选中的，其次按搜索结果提供的可用音质降级
+            prefer: List[str] = []
+            if quality_code == 'ACC_BEST':
+                # 选择最佳可用 AAC 档（192>96>48>24）
+                aac_order = ['ACC_192', 'ACC_96', 'ACC_48', 'ACC_24']
+                detected = getattr(song, 'available_qualities', []) or []
+                prefer.extend([q for q in aac_order if q in detected])
+                if not prefer:
+                    prefer = aac_order[:]  # 无探测信息时全量尝试
+            else:
+                prefer.append(quality_code)
+            if bool(getattr(config, 'DOWNGRADE_RETRY', True)):
+                detected = getattr(song, 'available_qualities', []) or []
+                for q in detected:
+                    if q not in prefer:
+                        prefer.append(q)
+                # 若无可用清单则按固定序列兜底
+                if not detected:
+                    fallback = ['MASTER', 'ATMOS_51', 'ATMOS_2', 'FLAC', 'MP3_320', 'MP3_128', 'ACC_192', 'ACC_96', 'ACC_48', 'ACC_24']
+                    for q in fallback:
+                        if q not in prefer:
+                            prefer.append(q)
+            # 去重
+            seen = set()
+            seq = []
+            for q in prefer:
+                if q not in seen:
+                    seen.add(q)
+                    seq.append(q)
+            # 逐档尝试
+            for q in seq:
+                # 将 ACC_BEST 在此处已展开，不再传递
+                res = await md.download_song(song_info, download_dir, filetype=q, progress_cb=progress_cb)
+                if res:
+                    return res
+                else:
+                    # 更新状态展示当前失败档位
+                    self.downloadInterface.set_row_status_text(row, f'重试失败: {q}')
+            return None
 
         def _on_finished(result_path):
             if result_path:

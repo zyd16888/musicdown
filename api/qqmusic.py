@@ -6,6 +6,7 @@ import asyncio
 import json
 from typing import Dict, List, Optional
 from pathlib import Path
+from utils.logger import logger
 
 try:
     from qqmusic_api import search, song, album, songlist, lyric, login
@@ -18,8 +19,6 @@ try:
 except ImportError:
     QQMUSIC_API_AVAILABLE = False
     logger.warning("警告: qqmusic-api-python 未安装")
-
-from utils.logger import logger
 
 
 class QQMusicAPI:
@@ -140,7 +139,7 @@ class QQMusicAPI:
             歌曲详细信息
         """
         try:
-            result = await song.get_song_detail(song_mid)
+            result = await song.get_detail(song_mid)
             return {"code": 0, "data": result}
         except Exception as e:
             logger.error(f"获取歌曲详情失败: {e}")
@@ -158,15 +157,33 @@ class QQMusicAPI:
         """
         try:
             # 质量映射到SongFileType枚举
+            # 质量映射：支持 canonical 与兼容别名（大小写无关由调用方保证）
             quality_map = {
-                'm4a': song.SongFileType.ACC_192,
-                '128': song.SongFileType.MP3_128,
-                '320': song.SongFileType.MP3_320,
-                'flac': song.SongFileType.FLAC,
-                'ATMOS_51': song.SongFileType.ATMOS_51,
-                'ATMOS_2': song.SongFileType.ATMOS_2,
-                'MASTER': song.SongFileType.MASTER,
-                'ogg': song.SongFileType.OGG_320
+                # AAC/M4A 档（按具体码率）
+                "ACC_192": song.SongFileType.ACC_192,
+                "ACC_96": song.SongFileType.ACC_96,
+                "ACC_48": song.SongFileType.ACC_48,
+                # 'ACC_24': song.SongFileType.ACC_24,  # 当前库未包含 ACC_24
+                # 别名：通用 m4a → 使用 192 作为优先请求（若失败可在上层降级）
+                "m4a": song.SongFileType.ACC_192,
+                # MP3 档
+                "MP3_128": song.SongFileType.MP3_128,
+                "MP3_320": song.SongFileType.MP3_320,
+                # 兼容旧代码
+                "128": song.SongFileType.MP3_128,
+                "320": song.SongFileType.MP3_320,
+                # 无损/臻品
+                "FLAC": song.SongFileType.FLAC,
+                "ATMOS_51": song.SongFileType.ATMOS_51,
+                "ATMOS_2": song.SongFileType.ATMOS_2,
+                "MASTER": song.SongFileType.MASTER,
+                # OGG 档
+                "OGG_640": song.SongFileType.OGG_640,
+                "OGG_320": song.SongFileType.OGG_320,
+                "OGG_192": song.SongFileType.OGG_192,
+                "OGG_96": song.SongFileType.OGG_96,
+                # 其他
+                "ogg": song.SongFileType.OGG_320,
             }
 
             file_type = quality_map.get(quality, song.SongFileType.MP3_128)
@@ -398,8 +415,6 @@ class QQMusicAPI:
             if callback:
                 callback("error", error_msg)
             return False, b"", error_msg
-
-
 
     async def login_with_phone(self, phone: int, country_code: int = 86, callback=None) -> tuple:
         """手机号登录
