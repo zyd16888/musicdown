@@ -1,0 +1,8 @@
+qqmusic-api-python>=0.3.4
+python-telegram-bot>=20.7
+mutagen>=1.45.0
+httpx>=0.24.0
+humanize>=4.0.0
+qrcode>=7.0.0
+pillow>=9.0.0
+urllib3
