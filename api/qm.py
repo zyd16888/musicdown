@@ -1,7 +1,7 @@
 import random
 import time
-from base64 import encode
-from typing import Dict
+from base64 import encode, b64encode
+from typing import Dict, Optional, Union
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -194,8 +194,14 @@ class QQMusicAPI:
         response = await self._make_request(self.base_url, RequestMethod.POST, payload)
         return self.parser.parse_playlist(response)
 
-    async def get_word_by_word_lyrics(self, songmid: str = None, songID: int = None, album_name: str = None,
-                                      singer_name: str = None, song_name: str = None) -> Dict:
+    async def get_word_by_word_lyrics(
+        self,
+        songmid: Optional[str] = None,  # 允许 None
+        songID: Optional[int] = None,  # 允许 None
+        album_name: Optional[str] = None,
+        singer_name: Optional[str] = None,
+        song_name: Optional[str] = None,
+    ) -> Dict:
         """异步获取逐字歌词（加密）
 
         Args:
@@ -211,13 +217,13 @@ class QQMusicAPI:
         if not songmid and not songID:
             raise ValueError("必须提供 songmid 或 songID 其中之一")
         # 建基础参数
-        param = {
+        param: Dict[str, Union[int, str]] = {
             "crypt": 1,
             "ct": 19,
             "cv": 1942,
             "qrc": 1,
             "roma": 1,
-            "trans": 1
+            "trans": 1,
         }
 
         # 添加歌曲标识参数
@@ -228,11 +234,11 @@ class QQMusicAPI:
 
         # 添加可选参数
         if album_name:
-            param["albumName"] = encode(album_name)
+            param["albumName"] = b64encode(album_name.encode("utf-8")).decode("utf-8")
         if singer_name:
-            param["singerName"] = encode(singer_name)
+            param["singerName"] = b64encode(singer_name.encode("utf-8")).decode("utf-8")
         if song_name:
-            param["songName"] = encode(song_name)
+            param["songName"] = b64encode(song_name.encode("utf-8")).decode("utf-8")
 
         payload = {
             "comm": {"uin": self.uin},

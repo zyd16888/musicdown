@@ -1,0 +1,18 @@
+{
+  "qqmusic": {
+    "cookie": "uin=475182659; qm_keyst=Q_H_L_63k3NxMgEwSrLhFsIcpMhpHTBxuBlo5-dapWH86sx6KoLTBlUbneN3cuSa2zGBgxg_XE8nY74CG0T8Y0bTi7EfQ;"
+  },
+  "tgbot": {
+    "botToken": "7858878953:AAE5TRJweMswJWvlGKFmD461AYxAlhMsHsI",
+    "apiBaseUrl": "https://apivt.790366.xyz/bot"
+  },
+  "download_path": "E:/musictest",
+  "cookie": "1234565789456789246875225525",
+  "quality": "320",
+  "login": {
+    "use_new_api": true,
+    "auto_login": false,
+    "type": "qr"
+  },
+  "auto_login": true
+}

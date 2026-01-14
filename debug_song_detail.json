@@ -1,0 +1,285 @@
+{
+  "info": {
+    "company": {
+      "title": "唱片公司",
+      "type": "JUMP_TO_COMPANY",
+      "content": [
+        {
+          "id": 10985,
+          "value": "大象无形",
+          "mid": "",
+          "type": 0,
+          "show_type": 0,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 51,
+      "more": 0,
+      "selected": "company",
+      "use_platform": 1
+    },
+    "genre": {
+      "title": "歌曲流派",
+      "type": "JUMP_TO_CATEGORY",
+      "content": [
+        {
+          "id": 40,
+          "value": "Pop",
+          "mid": "",
+          "type": 0,
+          "show_type": 2,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "http://y.qq.com/m/client/categoryzone/detail.html?categoryId=40&showType=2&isParent=0&_hidehd=1&groupId=100",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 12,
+      "more": 0,
+      "selected": "genre",
+      "use_platform": 3
+    },
+    "lan": {
+      "title": "歌曲语种",
+      "type": "JUMP_TO_CATEGORY",
+      "content": [
+        {
+          "id": 1,
+          "value": "国语",
+          "mid": "",
+          "type": 0,
+          "show_type": 2,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "http://y.qq.com/m/client/categoryzone/detail.html?categoryId=1&showType=2&isParent=0&_hidehd=1&groupId=100",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 11,
+      "more": 0,
+      "selected": "lan",
+      "use_platform": 3
+    },
+    "pub_time": {
+      "title": "发行时间",
+      "type": "desc",
+      "content": [
+        {
+          "id": 0,
+          "value": "2011-12-26",
+          "mid": "",
+          "type": 0,
+          "show_type": 0,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 50,
+      "more": 0,
+      "selected": "pub_time",
+      "use_platform": 0
+    }
+  },
+  "extras": {
+    "name": "坏女孩",
+    "transname": "",
+    "subtitle": "",
+    "from": "0",
+    "wikiurl": ""
+  },
+  "track_info": {
+    "id": 7112749,
+    "type": 1,
+    "mid": "0001oIjs0YFIf7",
+    "name": "坏女孩",
+    "title": "坏女孩",
+    "subtitle": "",
+    "singer": [
+      {
+        "id": 22704,
+        "mid": "004aRKga0CXIPm",
+        "name": "徐良",
+        "title": "徐良",
+        "type": 0,
+        "uin": 0
+      },
+      {
+        "id": 29263,
+        "mid": "001EuCQF42PV9e",
+        "name": "小凌",
+        "title": "小凌",
+        "type": 1,
+        "uin": 0
+      }
+    ],
+    "album": {
+      "id": 91325,
+      "mid": "002apRhZ4Bq99d",
+      "name": "不良少年",
+      "title": "不良少年",
+      "subtitle": "",
+      "time_public": "2011-12-26",
+      "pmid": "002apRhZ4Bq99d_2"
+    },
+    "mv": {
+      "id": 67094,
+      "vid": "D0090o0ZJMV",
+      "name": "",
+      "title": "",
+      "vt": 0
+    },
+    "interval": 246,
+    "isonly": 0,
+    "language": 0,
+    "genre": 1,
+    "index_cd": 0,
+    "index_album": 10,
+    "time_public": "2011-12-26",
+    "status": 0,
+    "fnote": 4009,
+    "file": {
+      "media_mid": "0003QzLv1kzY7F",
+      "size_24aac": 0,
+      "size_48aac": 1511557,
+      "size_96aac": 3031240,
+      "size_192ogg": 5367678,
+      "size_192aac": 5983052,
+      "size_128mp3": 3946564,
+      "size_320mp3": 9865969,
+      "size_ape": 0,
+      "size_flac": 24457943,
+      "size_dts": 0,
+      "size_try": 960887,
+      "try_begin": 51176,
+      "try_end": 80018,
+      "url": "",
+      "size_hires": 0,
+      "hires_sample": 0,
+      "hires_bitdepth": 0,
+      "b_30s": 0,
+      "e_30s": 60000,
+      "size_96ogg": 2783512,
+      "size_360ra": [],
+      "size_dolby": 7923631,
+      "size_new": [
+        159189735,
+        24611700,
+        63886520,
+        9721613,
+        0,
+        21194175,
+        32099231,
+        2342700,
+        24835395,
+        6947235
+      ]
+    },
+    "pay": {
+      "pay_month": 1,
+      "price_track": 200,
+      "price_album": 0,
+      "pay_play": 1,
+      "pay_down": 1,
+      "pay_status": 0,
+      "time_free": 0
+    },
+    "action": {
+      "switch": 16897793,
+      "msgid": 13,
+      "alert": 21,
+      "icons": 14073854,
+      "msgshare": 0,
+      "msgfav": 0,
+      "msgdown": 0,
+      "msgpay": 6,
+      "switch2": 0,
+      "icon2": 0
+    },
+    "ksong": {
+      "id": 69,
+      "mid": "0032SHiH23C0wG"
+    },
+    "volume": {
+      "gain": -8.563,
+      "peak": 1,
+      "lra": 13.665
+    },
+    "label": "0",
+    "url": "",
+    "bpm": 127,
+    "version": 0,
+    "trace": "",
+    "data_type": 0,
+    "modify_stamp": 0,
+    "pingpong": "",
+    "ppurl": "",
+    "tid": 0,
+    "ov": 1,
+    "sa": 23552,
+    "es": "",
+    "vs": [
+      "063jN7W72GlEKu",
+      "",
+      "",
+      "002lTh8t4VNI4T",
+      "001eHKOt2iAuMY",
+      "",
+      "",
+      "",
+      "",
+      "000P7Ipg3XC9SC",
+      "",
+      "",
+      "",
+      "003VR77X3j1IEV",
+      "000AcSIu019zMm",
+      "001iBDvS3EgQ8K",
+      "00017n632EKtQn",
+      "002mx70y3ethC6",
+      "003X2cBD3NqjBM",
+      "003ix3kG0PCh1c",
+      "002DSpTe0WFLC0",
+      "0033Mxqb1CeP5r",
+      "001reD1u29IIdu",
+      "000akfIN3KK1bx",
+      "003K4Mn02yqUXf",
+      "",
+      "003faPfR2CWDAD",
+      "",
+      "002oSMDR3SNc7X",
+      "001fAhpQ2NBTSo",
+      "00436BW72iMLUG"
+    ],
+    "vi": [
+      10985,
+      251,
+      251,
+      15211122,
+      51176,
+      81176,
+      1
+    ],
+    "ktag": "0",
+    "vf": [
+      -8.39971,
+      0.999969,
+      13.7957,
+      0,
+      0,
+      0
+    ]
+  }
+}

@@ -337,3 +337,26 @@ class MusicAdapter:
         if not disstid:
             return []
         return await self.get_playlist_songs(disstid)
+
+    async def get_login_user_info(self) -> Dict:
+        """调用 QQ 音乐接口获取当前登录用户信息。
+
+        Returns: 原始字典数据（若未登录或请求失败，返回 {}）
+        """
+        try:
+            from api.qqmusic import QQMusicAPI
+            qq = QQMusicAPI()
+            cred = getattr(qq, 'credential', None)
+            if not cred:
+                return {}
+            from qqmusic_api.utils.network import ApiRequest as QQApiRequest
+            req = QQApiRequest(
+                "music.UserInfo.userInfoServer",
+                "GetLoginUserInfo",
+                credential=cred,
+                cacheable=False,
+            )
+            data = await req()
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}

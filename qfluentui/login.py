@@ -16,6 +16,9 @@ from qfluentwidgets import (
 from qqmusic_api.login import get_qrcode, check_qrcode, QRLoginType, QRCodeLoginEvents
 from qqmusic_api.utils.credential import Credential
 from api.qqmusic import QQMusicAPI
+from api.adapter import MusicAdapter
+from qfluentui.worker import AsyncWorker
+from PySide6.QtCore import QThread
 
 # 持有正在运行的线程，避免窗口销毁时线程对象被提前析构
 RUNNING_THREADS = set()
@@ -110,6 +113,10 @@ class LoginPanel(FlyoutViewBase):
         self.titleLabel.setAlignment(Qt.AlignCenter)
         # 统一控制字号，避免默认 TitleLabel 字号过大导致换行
         self.titleLabel.setStyleSheet("font-size: 14px;")
+        # 会员状态标签（普通用户/绿钻/豪华绿钻）
+        self.vipLabel = BodyLabel("", self)
+        self.vipLabel.setAlignment(Qt.AlignCenter)
+        self.vipLabel.setStyleSheet("color: #888; font-size: 12px;")
 
         # --- QR Code Area ---
         self.qrWidget = QWidget(self)
@@ -163,6 +170,7 @@ class LoginPanel(FlyoutViewBase):
 
         # Main Layout
         self.vBoxLayout.addWidget(self.titleLabel, 0, Qt.AlignmentFlag.AlignCenter)
+        self.vBoxLayout.addWidget(self.vipLabel, 0, Qt.AlignmentFlag.AlignCenter)
         self.vBoxLayout.addSpacing(16)
         self.vBoxLayout.addWidget(self.qrWidget, 0, Qt.AlignmentFlag.AlignCenter)
         self.vBoxLayout.addSpacing(16)
@@ -246,6 +254,15 @@ class LoginPanel(FlyoutViewBase):
             api.save_credential(credential)
         except Exception:
             pass
+        # 推断会员状态并展示
+        try:
+            label = self._infer_membership_label(credential)
+            if label:
+                self.vipLabel.setText(f"会员：{label}")
+        except Exception:
+            pass
+        # 尝试从接口拉取更权威的用户信息，更新标签
+        self._fetch_membership_async()
         # emit success so outer code can update UI
         self.login_succeeded.emit(credential)
         # close only the flyout that contains this view to avoid closing main window
@@ -281,5 +298,115 @@ class LoginPanel(FlyoutViewBase):
                 p.close()
                 return
             p = p.parentWidget()
+
+    # ---- helpers ----
+    def _infer_membership_label(self, credential: Credential) -> str:
+        """根据 credential.extra_fields 推断会员等级（尽量稳健）。"""
+        data = getattr(credential, 'extra_fields', {}) or {}
+        return self._detect_vip_from_dict(data)
+
+    # ---- detection utils ----
+    def _detect_vip_from_dict(self, data: dict) -> str:
+        """在未知字段名差异时，通过扁平化 + 模糊匹配判断 VIP/SVIP。
+
+        规则：
+        - 先判定 SVIP：键名包含 'svip' 或 'supervip'，或在典型集合中；且值为真/数值>0/字符串数值>0/字符串'true'
+        - 再判定 VIP：键名包含 'vip'（但不包含 'svip'），或在典型集合中；且值同上
+        - 其他：普通用户
+        """
+        flat = {}
+        def _flatten(d: dict, p: str = ""):
+            for k, v in (d or {}).items():
+                key = (p + "." + str(k)) if p else str(k)
+                if isinstance(v, dict):
+                    _flatten(v, key)
+                else:
+                    flat[key.lower()] = v
+        _flatten(data)
+
+        def _truthy(v):
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, (int, float)):
+                return v > 0
+            if isinstance(v, str):
+                vs = v.strip().lower()
+                if vs.isdigit():
+                    return int(vs) > 0
+                return vs in ("true", "yes", "vip", "svip")
+            return False
+
+        # 典型键集合（全部转小写）
+        svip_keys = {"issvip", "is_svip", "svip", "supervip", "sviplevel", "viptype2"}
+        vip_keys = {"isvip", "is_vip", "vip", "vipflag", "viplevel", "paymonth", "viptype"}
+        blacklist_substr = ("openid", "appid")
+
+        # 先检测 SVIP
+        for k, v in flat.items():
+            if any(b in k for b in blacklist_substr):
+                continue
+            if ("svip" in k or "supervip" in k or k in svip_keys) and _truthy(v):
+                return "豪华绿钻"
+
+        # 再检测 VIP（排除包含 svip 的键）
+        for k, v in flat.items():
+            if any(b in k for b in blacklist_substr):
+                continue
+            if ("vip" in k and "svip" not in k) or (k in vip_keys):
+                if _truthy(v):
+                    return "绿钻"
+
+        return "普通用户"
+
+    def _fetch_membership_async(self):
+        thread = QThread()
+        worker = AsyncWorker()
+        worker.moveToThread(thread)
+        class _Task:
+            def __init__(self, c):
+                self.coro = c
+        async def _coro():
+            try:
+                adapter = MusicAdapter()
+                return await adapter.get_login_user_info()
+            except Exception:
+                return {}
+        def _on_finished(_task, data: dict):
+            try:
+                if isinstance(data, dict):
+                    label = self._detect_vip_from_dict(data)
+                    self.vipLabel.setText(f'会员：{label}')
+                    # 若仍无法判定，辅助输出可疑键到日志，便于调整映射
+                    if label == '普通用户':
+                        try:
+                            from utils.logger import logger
+                            keys = []
+                            def _collect(d, p=""):
+                                for k, v in (d or {}).items():
+                                    key = (p + "." + str(k)) if p else str(k)
+                                    if isinstance(v, dict):
+                                        _collect(v, key)
+                                    else:
+                                        kl = key.lower()
+                                        if ('vip' in kl) or ('svip' in kl):
+                                            keys.append(f"{key}={v}")
+                            _collect(data)
+                            if keys:
+                                logger.info("LoginUserInfo VIP-related keys: " + ", ".join(keys)[:500])
+                            else:
+                                logger.info("LoginUserInfo keys: " + ", ".join(list(data.keys()))[:500])
+                        except Exception:
+                            pass
+            finally:
+                thread.quit()
+                worker.deleteLater()
+        def _on_failed(_task, _e):
+            thread.quit()
+            worker.deleteLater()
+        worker.finished.connect(_on_finished)
+        worker.failed.connect(_on_failed)
+        thread.started.connect(lambda: worker.run(_Task(_coro())))
+        thread.finished.connect(thread.deleteLater)
+        thread.start()
 
 

@@ -60,6 +60,8 @@ class ConfigManager:
 class Config:
     config_file = ConfigManager.get_instance("config.json")
     DOWNLOADS_DIR: Path = field(default=Path('downloads'))
+    MAX_CONCURRENT: int = 3
+    DOWNGRADE_RETRY: bool = True
     DEFAULT_QUALITY: str = field(init=False)
     BLOCK_SIZE: int = 8192
     PROGRESS_UPDATE_INTERVAL: float = 0.5
@@ -78,6 +80,14 @@ class Config:
     def reload_config(self):
         """重新加载配置"""
         self.config_file.reload_config()
+        # 下载目录 & 并发配置
+        downloads_dir = self.config_file.get("downloads.dir", "downloads")
+        try:
+            self.DOWNLOADS_DIR = Path(downloads_dir)
+        except Exception:
+            self.DOWNLOADS_DIR = Path('downloads')
+        self.MAX_CONCURRENT = int(self.config_file.get("downloads.concurrent", 3))
+        self.DOWNGRADE_RETRY = bool(self.config_file.get("downloads.downgradeRetry", True))
         self.QQMUSIC_COOKIE = self.config_file.get("qqmusic.cookie", "")
         self.BOT_TOKEN = self.config_file.get("tgbot.botToken", "")
         # 设置自定义API地址，如果没有则使用默认
